@@ -737,12 +737,20 @@
       "userLabel": "superadmin",
       "action": "LOGIN_SUCCESS",
       "ip": "82.123.57.213",
+      "id": "fc52084e-b725-4171-b6d0-9c7dd945bb35",
+      "timestamp": "2026-03-23T21:28:06.153Z"
+    },
+    {
+      "userId": "116076ab-a1b6-4ff8-88d4-de2357dc82d6",
+      "userLabel": "superadmin",
+      "action": "LOGIN_SUCCESS",
+      "ip": "82.123.57.213",
       "id": "89d66789-0af1-478e-be91-815c9c952b8b",
       "timestamp": "2026-03-23T21:26:08.920Z"
     }
   ],
   "meta": {
     "version": "1.0.0",
-    "lastUpdated": "2026-03-23T21:26:08.920Z"
+    "lastUpdated": "2026-03-23T21:28:06.153Z"
   }
 }
