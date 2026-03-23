@@ -1,9 +1,3 @@
-export const config = {
-  api: {
-    bodyParser: false,
-    sizeLimit: '10mb',
-  },
-}
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { verifyToken, COOKIE_NAME } from '@/lib/auth'
