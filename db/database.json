@@ -733,6 +733,16 @@
   "files": [],
   "logs": [
     {
+      "userId": "33bf754a-0c58-4935-b0a4-82b23501bb6d",
+      "userLabel": "Gouvernement",
+      "action": "COMPANY_ACCESS",
+      "companyId": "33bf754a-0c58-4935-b0a4-82b23501bb6d",
+      "companyName": "Gouvernement",
+      "ip": "82.123.57.213",
+      "id": "7add1d52-1f1d-4496-968d-33d0ba95cce4",
+      "timestamp": "2026-03-23T21:30:44.983Z"
+    },
+    {
       "userId": "c8ce0592-4d46-4791-8bee-9af376a70dd6",
       "userLabel": "Globe Oil",
       "action": "COMPANY_ACCESS",
@@ -782,6 +792,6 @@
   ],
   "meta": {
     "version": "1.0.0",
-    "lastUpdated": "2026-03-23T21:29:39.050Z"
+    "lastUpdated": "2026-03-23T21:30:44.983Z"
   }
 }
