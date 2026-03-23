@@ -733,6 +733,14 @@
   "files": [],
   "logs": [
     {
+      "userId": "116076ab-a1b6-4ff8-88d4-de2357dc82d6",
+      "userLabel": "superadmin",
+      "action": "LOGIN_SUCCESS",
+      "ip": "82.123.57.213",
+      "id": "d882fc7e-da6d-4066-ae8c-88fab70ccae8",
+      "timestamp": "2026-03-23T21:50:49.208Z"
+    },
+    {
       "userId": "33bf754a-0c58-4935-b0a4-82b23501bb6d",
       "userLabel": "Gouvernement",
       "action": "COMPANY_ACCESS",
@@ -792,6 +800,6 @@
   ],
   "meta": {
     "version": "1.0.0",
-    "lastUpdated": "2026-03-23T21:30:44.983Z"
+    "lastUpdated": "2026-03-23T21:50:49.208Z"
   }
 }
