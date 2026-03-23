@@ -733,6 +733,16 @@
   "files": [],
   "logs": [
     {
+      "userId": "c8ce0592-4d46-4791-8bee-9af376a70dd6",
+      "userLabel": "Globe Oil",
+      "action": "COMPANY_ACCESS",
+      "companyId": "c8ce0592-4d46-4791-8bee-9af376a70dd6",
+      "companyName": "Globe Oil",
+      "ip": "82.123.57.213",
+      "id": "87512053-cf72-45bd-a3de-5555bbfe387a",
+      "timestamp": "2026-03-23T21:29:39.050Z"
+    },
+    {
       "userId": "843833c0-ec1c-4010-8f53-c97bbd72ed71",
       "userLabel": "SASP",
       "action": "COMPANY_ACCESS",
@@ -772,6 +782,6 @@
   ],
   "meta": {
     "version": "1.0.0",
-    "lastUpdated": "2026-03-23T21:29:09.243Z"
+    "lastUpdated": "2026-03-23T21:29:39.050Z"
   }
 }
