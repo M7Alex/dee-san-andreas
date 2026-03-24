@@ -1,53 +1,77 @@
-export type UserRole = 'superadmin' | 'admin' | 'consultant'
+export type UserRole = 'superadmin' | 'admin' | 'consultant' | 'company'
 
-export interface AdminPermissions {
-  viewPins: boolean          // Voir les PINs des entreprises
-  editPins: boolean          // Modifier les PINs
-  uploadFiles: boolean       // Uploader des fichiers
-  deleteFiles: boolean       // Supprimer des fichiers
-  viewLogs: boolean          // Voir les journaux
-  manageAdmins: boolean      // Gérer les admins (superadmin seulement)
-  bypassCompanyAccess: boolean // Accéder à toutes les entreprises sans PIN
+export interface Permissions {
+  canUploadFiles: boolean
+  canDownloadFiles: boolean
+  canDeleteFiles: boolean
+  canPinFiles: boolean
+  canViewAllCompanies: boolean
+  canManageCompanies: boolean
+  canManageAdmins: boolean
+  canManageConsultants: boolean
+  canManagePins: boolean
+  canViewLogs: boolean
+  canViewConnexions: boolean
+  visibleTabs: Array<'dashboard' | 'companies' | 'logs' | 'pins' | 'admins' | 'connexions'>
 }
 
-export const DEFAULT_PERMISSIONS: Record<UserRole, AdminPermissions> = {
+export const DEFAULT_PERMISSIONS: Record<UserRole, Permissions> = {
   superadmin: {
-    viewPins: true,
-    editPins: true,
-    uploadFiles: true,
-    deleteFiles: true,
-    viewLogs: true,
-    manageAdmins: true,
-    bypassCompanyAccess: true,
+    canUploadFiles: true,
+    canDownloadFiles: true,
+    canDeleteFiles: true,
+    canPinFiles: true,
+    canViewAllCompanies: true,
+    canManageCompanies: true,
+    canManageAdmins: true,
+    canManageConsultants: true,
+    canManagePins: true,
+    canViewLogs: true,
+    canViewConnexions: true,
+    visibleTabs: ['dashboard', 'companies', 'logs', 'pins', 'admins', 'connexions'],
   },
   admin: {
-    viewPins: true,
-    editPins: true,
-    uploadFiles: true,
-    deleteFiles: true,
-    viewLogs: true,
-    manageAdmins: false,
-    bypassCompanyAccess: true,
+    canUploadFiles: true,
+    canDownloadFiles: true,
+    canDeleteFiles: true,
+    canPinFiles: true,
+    canViewAllCompanies: true,
+    canManageCompanies: false,
+    canManageAdmins: false,
+    canManageConsultants: true,
+    canManagePins: false,
+    canViewLogs: true,
+    canViewConnexions: false,
+    visibleTabs: ['dashboard', 'companies', 'logs', 'admins'],
   },
   consultant: {
-    viewPins: false,
-    editPins: false,
-    uploadFiles: true,
-    deleteFiles: false,
-    viewLogs: false,
-    manageAdmins: false,
-    bypassCompanyAccess: true,
+    canUploadFiles: false,
+    canDownloadFiles: true,
+    canDeleteFiles: false,
+    canPinFiles: false,
+    canViewAllCompanies: true,
+    canManageCompanies: false,
+    canManageAdmins: false,
+    canManageConsultants: false,
+    canManagePins: false,
+    canViewLogs: false,
+    canViewConnexions: false,
+    visibleTabs: ['dashboard', 'companies'],
   },
-}
-
-export const PERMISSION_LABELS: Record<keyof AdminPermissions, string> = {
-  viewPins: 'Voir les PINs entreprises',
-  editPins: 'Modifier les PINs',
-  uploadFiles: 'Uploader des fichiers',
-  deleteFiles: 'Supprimer des fichiers',
-  viewLogs: 'Voir les journaux',
-  manageAdmins: 'Gérer les administrateurs',
-  bypassCompanyAccess: 'Accès direct aux entreprises (sans PIN)',
+  company: {
+    canUploadFiles: false,
+    canDownloadFiles: true,
+    canDeleteFiles: false,
+    canPinFiles: false,
+    canViewAllCompanies: false,
+    canManageCompanies: false,
+    canManageAdmins: false,
+    canManageConsultants: false,
+    canManagePins: false,
+    canViewLogs: false,
+    canViewConnexions: false,
+    visibleTabs: [],
+  },
 }
 
 export interface AdminUser {
@@ -55,9 +79,10 @@ export interface AdminUser {
   username: string
   passwordHash: string
   role: UserRole
-  permissions: AdminPermissions
+  permissions?: Permissions
   createdAt: string
   lastLogin?: string
+  createdBy?: string
 }
 
 export interface Company {
@@ -107,18 +132,10 @@ export interface ActivityLog {
 }
 
 export type LogAction =
-  | 'LOGIN_SUCCESS'
-  | 'LOGIN_FAILED'
-  | 'COMPANY_ACCESS'
-  | 'FILE_UPLOAD'
-  | 'FILE_DELETE'
-  | 'FILE_PIN'
-  | 'FILE_UNPIN'
-  | 'PIN_REGENERATED'
-  | 'ADMIN_CREATED'
-  | 'ADMIN_DELETED'
-  | 'COMPANY_CREATED'
-  | 'PERMISSIONS_UPDATED'
+  | 'LOGIN_SUCCESS' | 'LOGIN_FAILED' | 'COMPANY_ACCESS'
+  | 'FILE_UPLOAD' | 'FILE_DELETE' | 'FILE_PIN' | 'FILE_UNPIN'
+  | 'PIN_REGENERATED' | 'ADMIN_CREATED' | 'CONSULTANT_CREATED'
+  | 'COMPANY_CREATED' | 'PERMISSIONS_UPDATED' | 'USER_DELETED'
 
 export interface DatabaseSchema {
   admins: AdminUser[]
@@ -133,5 +150,4 @@ export interface SessionData {
   role: UserRole
   companyId?: string
   companySlug?: string
-  permissions?: AdminPermissions
 }

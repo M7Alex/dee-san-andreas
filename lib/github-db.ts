@@ -1,14 +1,12 @@
 /**
- * GitHub as Database Layer
+ * GitHub comme base de données
+ * Stocke toutes les données dans db/database.json dans un repo GitHub privé.
  * 
- * Stores all data as JSON files in a GitHub repository.
- * Uses GitHub API to read/write with optimistic locking via SHA.
- * 
- * Required env vars:
- *   GITHUB_TOKEN         - Personal access token with repo:write
- *   GITHUB_OWNER         - GitHub username or org
- *   GITHUB_REPO          - Repository name (e.g. "dee-database")
- *   GITHUB_BRANCH        - Branch (default: "main")
+ * Variables d'env requises :
+ *   GITHUB_TOKEN  - Personal Access Token (scope: repo)
+ *   GITHUB_OWNER  - Ton username GitHub
+ *   GITHUB_REPO   - Nom du repo de données (ex: dee-database)
+ *   GITHUB_BRANCH - Branche (défaut: main)
  */
 
 import { DatabaseSchema, AdminUser, Company, FileRecord, ActivityLog } from '@/types'
@@ -18,10 +16,7 @@ const OWNER = process.env.GITHUB_OWNER!
 const REPO = process.env.GITHUB_REPO!
 const BRANCH = process.env.GITHUB_BRANCH || 'main'
 const TOKEN = process.env.GITHUB_TOKEN!
-
 const DB_PATH = 'db/database.json'
-
-// ─── Default empty database ───────────────────────────────────────────────────
 
 function emptyDb(): DatabaseSchema {
   return {
@@ -33,16 +28,9 @@ function emptyDb(): DatabaseSchema {
   }
 }
 
-// ─── Read database from GitHub ────────────────────────────────────────────────
-
-interface GithubFile {
-  content: string
-  sha: string
-  encoding: string
-}
-
+// Cache court pour éviter trop de requêtes GitHub
 let _cache: { db: DatabaseSchema; sha: string; ts: number } | null = null
-const CACHE_TTL = 5000 // 5 seconds
+const CACHE_TTL = 3000 // 3 secondes
 
 export async function readDb(): Promise<{ db: DatabaseSchema; sha: string }> {
   const now = Date.now()
@@ -51,35 +39,39 @@ export async function readDb(): Promise<{ db: DatabaseSchema; sha: string }> {
   }
 
   const res = await fetch(
-    `${GITHUB_API}/repos/${OWNER}/${REPO}/contents/${DB_PATH}?ref=${BRANCH}`,
+    `${GITHUB_API}/repos/${OWNER}/${REPO}/contents/${DB_PATH}?ref=${BRANCH}&t=${now}`,
     {
       headers: {
         Authorization: `Bearer ${TOKEN}`,
         Accept: 'application/vnd.github.v3+json',
+        'Cache-Control': 'no-cache',
       },
-      next: { revalidate: 0 },
+      cache: 'no-store',
     }
   )
 
   if (res.status === 404) {
-    // Initialize empty database
     const db = emptyDb()
     const sha = await writeDb(db, '')
     _cache = { db, sha, ts: Date.now() }
     return { db, sha }
   }
 
-  if (!res.ok) throw new Error(`GitHub API error: ${res.status}`)
+  if (!res.ok) throw new Error(`GitHub API error: ${res.status} - ${await res.text()}`)
 
-  const file: GithubFile = await res.json()
+  const file = await res.json()
   const content = Buffer.from(file.content, 'base64').toString('utf-8')
-  const db: DatabaseSchema = JSON.parse(content)
+  
+  let db: DatabaseSchema
+  try {
+    db = JSON.parse(content)
+  } catch {
+    db = emptyDb()
+  }
 
   _cache = { db, sha: file.sha, ts: Date.now() }
   return { db, sha: file.sha }
 }
-
-// ─── Write database to GitHub ─────────────────────────────────────────────────
 
 export async function writeDb(db: DatabaseSchema, sha: string): Promise<string> {
   db.meta.lastUpdated = new Date().toISOString()
@@ -112,14 +104,9 @@ export async function writeDb(db: DatabaseSchema, sha: string): Promise<string> 
 
   const data = await res.json()
   const newSha = data.content.sha
-
-  // Invalidate cache
   _cache = { db, sha: newSha, ts: Date.now() }
-
   return newSha
 }
-
-// ─── Helper: atomic update ────────────────────────────────────────────────────
 
 export async function updateDb(
   updater: (db: DatabaseSchema) => DatabaseSchema | Promise<DatabaseSchema>
@@ -129,26 +116,25 @@ export async function updateDb(
   await writeDb(updated, sha)
 }
 
-// ─── Convenience getters ──────────────────────────────────────────────────────
-
+// Getters pratiques
 export async function getCompanies(): Promise<Company[]> {
   const { db } = await readDb()
-  return db.companies.filter((c) => c.active)
+  return db.companies.filter(c => c.active)
 }
 
 export async function getCompanyBySlug(slug: string): Promise<Company | null> {
   const { db } = await readDb()
-  return db.companies.find((c) => c.slug === slug) || null
+  return db.companies.find(c => c.slug === slug) || null
 }
 
 export async function getFilesByCompany(companyId: string): Promise<FileRecord[]> {
   const { db } = await readDb()
-  return db.files.filter((f) => f.companyId === companyId)
+  return db.files.filter(f => f.companyId === companyId)
 }
 
 export async function getAdminByUsername(username: string): Promise<AdminUser | null> {
   const { db } = await readDb()
-  return db.admins.find((a) => a.username === username) || null
+  return db.admins.find(a => a.username === username) || null
 }
 
 export async function getLogs(limit = 100): Promise<ActivityLog[]> {
@@ -157,14 +143,17 @@ export async function getLogs(limit = 100): Promise<ActivityLog[]> {
 }
 
 export async function addLog(log: Omit<ActivityLog, 'id' | 'timestamp'>): Promise<void> {
-  await updateDb((db) => {
-    const newLog: ActivityLog = {
-      ...log,
-      id: crypto.randomUUID(),
-      timestamp: new Date().toISOString(),
-    }
-    // Keep last 500 logs
-    db.logs = [newLog, ...db.logs].slice(0, 500)
-    return db
-  })
+  try {
+    await updateDb((db) => {
+      const newLog: ActivityLog = {
+        ...log,
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
+      }
+      db.logs = [newLog, ...db.logs].slice(0, 500)
+      return db
+    })
+  } catch (err) {
+    console.error('addLog error:', err)
+  }
 }
