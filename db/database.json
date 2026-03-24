@@ -740,6 +740,16 @@
       "companyId": "33bf754a-0c58-4935-b0a4-82b23501bb6d",
       "companyName": "Gouvernement",
       "ip": "82.123.57.213",
+      "id": "7ae85c3e-0136-41e1-88f9-d756017afabc",
+      "timestamp": "2026-03-24T02:51:27.273Z"
+    },
+    {
+      "userId": "33bf754a-0c58-4935-b0a4-82b23501bb6d",
+      "userLabel": "Gouvernement",
+      "action": "COMPANY_ACCESS",
+      "companyId": "33bf754a-0c58-4935-b0a4-82b23501bb6d",
+      "companyName": "Gouvernement",
+      "ip": "82.123.57.213",
       "id": "6550872f-a53a-491b-adfb-64f1e036b7b5",
       "timestamp": "2026-03-24T02:50:38.963Z"
     },
@@ -902,6 +912,6 @@
   ],
   "meta": {
     "version": "1.0.0",
-    "lastUpdated": "2026-03-24T02:50:38.963Z"
+    "lastUpdated": "2026-03-24T02:51:27.273Z"
   }
 }
