@@ -2,157 +2,88 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { verifyToken, COOKIE_NAME, hashPassword } from '@/lib/auth'
 import { readDb, updateDb, addLog } from '@/lib/github-db'
-import { AdminUser, DEFAULT_PERMISSIONS, Permissions, UserRole } from '@/types'
+import { AdminUser, DEFAULT_PERMISSIONS, AdminPermissions, UserRole } from '@/types'
 
 export const dynamic = 'force-dynamic'
 
-// GET : liste admins et consultants
 export async function GET() {
   const token = cookies().get(COOKIE_NAME)?.value
   if (!token) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const session = await verifyToken(token)
-  if (!session || session.role === 'company' || session.role === 'consultant') {
-    return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
-  }
+  if (!session || session.role !== 'superadmin') return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+
   const { db } = await readDb()
-  const list = db.admins.map(a => ({
+  return NextResponse.json(db.admins.map(a => ({
     id: a.id,
     username: a.username,
     role: a.role,
-    permissions: a.permissions ?? DEFAULT_PERMISSIONS[a.role],
+    permissions: a.permissions || DEFAULT_PERMISSIONS[a.role],
     createdAt: a.createdAt,
     lastLogin: a.lastLogin,
-    createdBy: a.createdBy,
-  }))
-  return NextResponse.json(list)
+  })))
 }
 
-// POST : créer admin ou consultant
 export async function POST(req: NextRequest) {
   const token = cookies().get(COOKIE_NAME)?.value
   if (!token) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const session = await verifyToken(token)
-  if (!session) return NextResponse.json({ error: 'Session invalide' }, { status: 401 })
+  if (!session || session.role !== 'superadmin') return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
 
   const { username, password, role, permissions } = await req.json()
+  if (!username || !password) return NextResponse.json({ error: 'Données manquantes' }, { status: 400 })
 
-  // Seul superadmin peut créer des admins, admin peut créer des consultants
-  if (role === 'admin' && session.role !== 'superadmin') {
-    return NextResponse.json({ error: 'Seul le superadmin peut créer des admins' }, { status: 403 })
-  }
-  if (role === 'consultant' && session.role !== 'superadmin' && session.role !== 'admin') {
-    return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
-  }
-  if (role === 'superadmin') {
-    return NextResponse.json({ error: 'Impossible de créer un superadmin' }, { status: 403 })
-  }
-
-  if (!username || !password || !role) {
-    return NextResponse.json({ error: 'Données manquantes' }, { status: 400 })
-  }
+  const validRole: UserRole = ['superadmin', 'admin', 'consultant'].includes(role) ? role : 'admin'
 
   const { db } = await readDb()
   if (db.admins.find(a => a.username === username)) {
-    return NextResponse.json({ error: 'Ce nom d\'utilisateur existe déjà' }, { status: 409 })
+    return NextResponse.json({ error: 'Identifiant déjà utilisé' }, { status: 409 })
   }
 
   const passwordHash = await hashPassword(password)
-  const newUser: AdminUser = {
+  const newAdmin: AdminUser = {
     id: crypto.randomUUID(),
     username,
     passwordHash,
-    role: role as UserRole,
-    permissions: permissions ?? DEFAULT_PERMISSIONS[role as UserRole],
+    role: validRole,
+    permissions: permissions || DEFAULT_PERMISSIONS[validRole],
     createdAt: new Date().toISOString(),
-    createdBy: session.userId,
   }
 
-  await updateDb((db) => {
-    db.admins.push(newUser)
-    return db
-  })
+  await updateDb((db) => { db.admins.push(newAdmin); return db })
+  await addLog({ userId: session.userId, userLabel: session.role, action: 'ADMIN_CREATED', details: `Création de ${username} (${validRole})` })
 
-  await addLog({
-    userId: session.userId,
-    userLabel: session.role,
-    action: role === 'consultant' ? 'CONSULTANT_CREATED' : 'ADMIN_CREATED',
-    details: `Création de ${role} "${username}"`,
-  })
-
-  return NextResponse.json({ ok: true, user: { id: newUser.id, username, role } })
+  return NextResponse.json({ ok: true, admin: { id: newAdmin.id, username: newAdmin.username, role: newAdmin.role, permissions: newAdmin.permissions } })
 }
 
-// PATCH : mettre à jour les permissions
-export async function PATCH(req: NextRequest) {
-  const token = cookies().get(COOKIE_NAME)?.value
-  if (!token) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
-  const session = await verifyToken(token)
-  if (!session || session.role === 'company' || session.role === 'consultant') {
-    return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
-  }
-
-  const { userId, permissions } = await req.json()
-  if (!userId || !permissions) return NextResponse.json({ error: 'Données manquantes' }, { status: 400 })
-
-  const { db } = await readDb()
-  const target = db.admins.find(a => a.id === userId)
-  if (!target) return NextResponse.json({ error: 'Utilisateur introuvable' }, { status: 404 })
-
-  // Admin ne peut modifier que les consultants
-  if (session.role === 'admin' && target.role !== 'consultant') {
-    return NextResponse.json({ error: 'Un admin ne peut modifier que les consultants' }, { status: 403 })
-  }
-  // Personne ne peut modifier le superadmin
-  if (target.role === 'superadmin') {
-    return NextResponse.json({ error: 'Impossible de modifier le superadmin' }, { status: 403 })
-  }
-
-  await updateDb((db) => {
-    const user = db.admins.find(a => a.id === userId)
-    if (user) user.permissions = permissions as Permissions
-    return db
-  })
-
-  await addLog({
-    userId: session.userId,
-    userLabel: session.role,
-    action: 'PERMISSIONS_UPDATED',
-    details: `Permissions mises à jour pour "${target.username}"`,
-  })
-
-  return NextResponse.json({ ok: true })
-}
-
-// DELETE : supprimer un admin ou consultant
 export async function DELETE(req: NextRequest) {
   const token = cookies().get(COOKIE_NAME)?.value
   if (!token) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const session = await verifyToken(token)
-  if (!session) return NextResponse.json({ error: 'Session invalide' }, { status: 401 })
+  if (!session || session.role !== 'superadmin') return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
 
-  const { userId } = await req.json()
-  const { db } = await readDb()
-  const target = db.admins.find(a => a.id === userId)
-  if (!target) return NextResponse.json({ error: 'Utilisateur introuvable' }, { status: 404 })
+  const { adminId } = await req.json()
+  if (adminId === session.userId) return NextResponse.json({ error: 'Impossible de supprimer son propre compte' }, { status: 400 })
 
-  if (target.role === 'superadmin') {
-    return NextResponse.json({ error: 'Impossible de supprimer le superadmin' }, { status: 403 })
-  }
-  if (target.role === 'admin' && session.role !== 'superadmin') {
-    return NextResponse.json({ error: 'Seul le superadmin peut supprimer un admin' }, { status: 403 })
-  }
+  await updateDb((db) => { db.admins = db.admins.filter(a => a.id !== adminId); return db })
+  await addLog({ userId: session.userId, userLabel: session.role, action: 'ADMIN_DELETED' })
+  return NextResponse.json({ ok: true })
+}
+
+// PATCH : mettre à jour les permissions d'un admin
+export async function PATCH(req: NextRequest) {
+  const token = cookies().get(COOKIE_NAME)?.value
+  if (!token) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+  const session = await verifyToken(token)
+  if (!session || session.role !== 'superadmin') return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+
+  const { adminId, permissions } = await req.json()
 
   await updateDb((db) => {
-    db.admins = db.admins.filter(a => a.id !== userId)
+    const admin = db.admins.find(a => a.id === adminId)
+    if (admin) admin.permissions = permissions
     return db
   })
 
-  await addLog({
-    userId: session.userId,
-    userLabel: session.role,
-    action: 'USER_DELETED',
-    details: `Suppression de ${target.role} "${target.username}"`,
-  })
-
+  await addLog({ userId: session.userId, userLabel: session.role, action: 'PERMISSIONS_UPDATED', details: `Permissions modifiées pour admin ${adminId}` })
   return NextResponse.json({ ok: true })
 }

@@ -2,34 +2,21 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { verifyToken, COOKIE_NAME } from '@/lib/auth'
 import { uploadFile } from '@/lib/blob'
-import { updateDb, addLog, readDb } from '@/lib/github-db'
-import { FolderType, FileRecord, DEFAULT_PERMISSIONS } from '@/types'
+import { updateDb, addLog } from '@/lib/github-db'
+import { FolderType, FileRecord } from '@/types'
 
 export const dynamic = 'force-dynamic'
+
+// Nouvelle syntaxe Next.js 14 pour la limite de taille
 export const maxDuration = 30
 
 export async function POST(req: NextRequest) {
   try {
     const token = cookies().get(COOKIE_NAME)?.value
     if (!token) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
-
+    
     const session = await verifyToken(token)
     if (!session) return NextResponse.json({ error: 'Session invalide' }, { status: 401 })
-
-    // Vérifier la permission d'upload
-    if (session.role === 'company') {
-      return NextResponse.json({ error: 'Les visiteurs entreprise ne peuvent pas uploader' }, { status: 403 })
-    }
-
-    // Vérifier les permissions personnalisées pour consultant
-    if (session.role === 'consultant') {
-      const { db } = await readDb()
-      const user = db.admins.find(a => a.id === session.userId)
-      const perms = user?.permissions ?? DEFAULT_PERMISSIONS.consultant
-      if (!perms.canUploadFiles) {
-        return NextResponse.json({ error: 'Permission refusée : upload non autorisé' }, { status: 403 })
-      }
-    }
 
     const formData = await req.formData()
     const file = formData.get('file') as File
@@ -39,6 +26,10 @@ export async function POST(req: NextRequest) {
 
     if (!file || !folder || !companyId || !companySlug) {
       return NextResponse.json({ error: 'Données manquantes' }, { status: 400 })
+    }
+
+    if (session.role === 'company' && session.companyId !== companyId) {
+      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
 
     const { url } = await uploadFile(file, companySlug, folder)
@@ -66,7 +57,7 @@ export async function POST(req: NextRequest) {
 
     await addLog({
       userId: session.userId,
-      userLabel: session.role,
+      userLabel: session.role === 'company' ? companySlug : 'admin',
       action: 'FILE_UPLOAD',
       companyId,
       companyName: companySlug,
@@ -75,6 +66,7 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json({ ok: true, file: fileRecord })
+
   } catch (err: unknown) {
     console.error('Upload error:', err)
     return NextResponse.json(

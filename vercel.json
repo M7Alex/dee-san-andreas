@@ -4,6 +4,7 @@
       "maxDuration": 30
     }
   },
+  "ignoreCommand": "git diff --name-only HEAD^ HEAD | grep -qvE '^db/' && echo 1 || echo 0",
   "headers": [
     {
       "source": "/api/(.*)",

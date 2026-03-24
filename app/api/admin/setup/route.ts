@@ -2,12 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { readDb, updateDb } from '@/lib/github-db'
 import { hashPassword, generatePin, hashPin } from '@/lib/auth'
 import { COMPANIES } from '@/lib/companies-data'
-import { Company } from '@/types'
+import { Company, AdminUser, DEFAULT_PERMISSIONS } from '@/types'
 
-/**
- * One-time setup route to initialize the database with default data.
- * Protected by a setup token from env vars.
- */
 export async function POST(req: NextRequest) {
   const { setupToken } = await req.json()
   if (setupToken !== process.env.SETUP_TOKEN) {
@@ -19,19 +15,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Base de données déjà initialisée' }, { status: 400 })
   }
 
-  // Create superadmin
   const superadminPassword = process.env.INITIAL_ADMIN_PASSWORD || 'ChangeMePlease123!'
   const passwordHash = await hashPassword(superadminPassword)
   
-  db.admins.push({
+  const superadmin: AdminUser = {
     id: crypto.randomUUID(),
     username: 'superadmin',
     passwordHash,
     role: 'superadmin',
+    permissions: DEFAULT_PERMISSIONS.superadmin,
     createdAt: new Date().toISOString(),
-  })
+  }
+  db.admins.push(superadmin)
 
-  // Create companies with random PINs
   const companyPins: { name: string; slug: string; pin: string }[] = []
 
   for (const template of COMPANIES) {

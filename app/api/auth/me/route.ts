@@ -1,23 +1,28 @@
-import { NextResponse } from 'next/server'
+export const dynamic = 'force-dynamic'
+
+import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { verifyToken, COOKIE_NAME } from '@/lib/auth'
 import { readDb } from '@/lib/github-db'
-import { DEFAULT_PERMISSIONS, UserRole } from '@/types'
+import { DEFAULT_PERMISSIONS } from '@/types'
 
-export const dynamic = 'force-dynamic'
-
-export async function GET() {
+export async function GET(req: NextRequest) {
   const token = cookies().get(COOKIE_NAME)?.value
-  if (!token) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+  if (!token) return NextResponse.json({ authenticated: false })
+  
   const session = await verifyToken(token)
-  if (!session) return NextResponse.json({ error: 'Session invalide' }, { status: 401 })
+  if (!session) return NextResponse.json({ authenticated: false })
 
-  const { db } = await readDb()
-  const user = db.admins.find(a => a.id === session.userId)
-  const permissions = user?.permissions ?? DEFAULT_PERMISSIONS[session.role as UserRole] ?? DEFAULT_PERMISSIONS.consultant
-
-  return NextResponse.json({
-    ...session,
-    permissions,
-  })
+  // Récupérer les permissions réelles depuis la DB
+  if (session.role !== 'company') {
+    try {
+      const { db } = await readDb()
+      const admin = db.admins.find(a => a.id === session.userId)
+      if (admin) {
+        session.permissions = admin.permissions || DEFAULT_PERMISSIONS[admin.role]
+      }
+    } catch {}
+  }
+  
+  return NextResponse.json({ authenticated: true, session })
 }
