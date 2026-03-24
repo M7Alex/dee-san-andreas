@@ -1,5 +1,4 @@
-export const dynamic = "force-dynamic"
-
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { verifyToken, COOKIE_NAME } from '@/lib/auth'
@@ -10,10 +9,8 @@ export async function GET(req: NextRequest) {
   if (!token) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
   const session = await verifyToken(token)
   if (!session || session.role === 'company') return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
-
   const { searchParams } = new URL(req.url)
-  const limit = parseInt(searchParams.get('limit') || '100')
-
+  const limit = parseInt(searchParams.get('limit') || '200')
   const logs = await getLogs(limit)
   return NextResponse.json(logs)
 }

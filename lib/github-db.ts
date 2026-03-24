@@ -1,14 +1,7 @@
 /**
  * GitHub comme base de données
- * Stocke toutes les données dans db/database.json dans un repo GitHub privé.
- * 
- * Variables d'env requises :
- *   GITHUB_TOKEN  - Personal Access Token (scope: repo)
- *   GITHUB_OWNER  - Ton username GitHub
- *   GITHUB_REPO   - Nom du repo de données (ex: dee-database)
- *   GITHUB_BRANCH - Branche (défaut: main)
+ * GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO (dee-database), GITHUB_BRANCH
  */
-
 import { DatabaseSchema, AdminUser, Company, FileRecord, ActivityLog } from '@/types'
 
 const GITHUB_API = 'https://api.github.com'
@@ -19,36 +12,20 @@ const TOKEN = process.env.GITHUB_TOKEN!
 const DB_PATH = 'db/database.json'
 
 function emptyDb(): DatabaseSchema {
-  return {
-    admins: [],
-    companies: [],
-    files: [],
-    logs: [],
-    meta: { version: '1.0.0', lastUpdated: new Date().toISOString() },
-  }
+  return { admins: [], companies: [], files: [], logs: [], meta: { version: '1.0.0', lastUpdated: new Date().toISOString() } }
 }
 
-// Cache court pour éviter trop de requêtes GitHub
 let _cache: { db: DatabaseSchema; sha: string; ts: number } | null = null
-const CACHE_TTL = 3000 // 3 secondes
+const CACHE_TTL = 3000
 
 export async function readDb(): Promise<{ db: DatabaseSchema; sha: string }> {
   const now = Date.now()
-  if (_cache && now - _cache.ts < CACHE_TTL) {
-    return { db: _cache.db, sha: _cache.sha }
-  }
+  if (_cache && now - _cache.ts < CACHE_TTL) return { db: _cache.db, sha: _cache.sha }
 
-  const res = await fetch(
-    `${GITHUB_API}/repos/${OWNER}/${REPO}/contents/${DB_PATH}?ref=${BRANCH}&t=${now}`,
-    {
-      headers: {
-        Authorization: `Bearer ${TOKEN}`,
-        Accept: 'application/vnd.github.v3+json',
-        'Cache-Control': 'no-cache',
-      },
-      cache: 'no-store',
-    }
-  )
+  const res = await fetch(`${GITHUB_API}/repos/${OWNER}/${REPO}/contents/${DB_PATH}?ref=${BRANCH}&t=${now}`, {
+    headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/vnd.github.v3+json', 'Cache-Control': 'no-cache' },
+    cache: 'no-store',
+  })
 
   if (res.status === 404) {
     const db = emptyDb()
@@ -56,19 +33,12 @@ export async function readDb(): Promise<{ db: DatabaseSchema; sha: string }> {
     _cache = { db, sha, ts: Date.now() }
     return { db, sha }
   }
-
-  if (!res.ok) throw new Error(`GitHub API error: ${res.status} - ${await res.text()}`)
+  if (!res.ok) throw new Error(`GitHub API error: ${res.status}`)
 
   const file = await res.json()
   const content = Buffer.from(file.content, 'base64').toString('utf-8')
-  
   let db: DatabaseSchema
-  try {
-    db = JSON.parse(content)
-  } catch {
-    db = emptyDb()
-  }
-
+  try { db = JSON.parse(content) } catch { db = emptyDb() }
   _cache = { db, sha: file.sha, ts: Date.now() }
   return { db, sha: file.sha }
 }
@@ -76,84 +46,38 @@ export async function readDb(): Promise<{ db: DatabaseSchema; sha: string }> {
 export async function writeDb(db: DatabaseSchema, sha: string): Promise<string> {
   db.meta.lastUpdated = new Date().toISOString()
   const content = Buffer.from(JSON.stringify(db, null, 2)).toString('base64')
-
-  const body: Record<string, unknown> = {
-    message: `[db] update ${new Date().toISOString()}`,
-    content,
-    branch: BRANCH,
-  }
+  const body: Record<string, unknown> = { message: `[db] update ${new Date().toISOString()}`, content, branch: BRANCH }
   if (sha) body.sha = sha
 
-  const res = await fetch(
-    `${GITHUB_API}/repos/${OWNER}/${REPO}/contents/${DB_PATH}`,
-    {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${TOKEN}`,
-        Accept: 'application/vnd.github.v3+json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    }
-  )
-
-  if (!res.ok) {
-    const err = await res.json()
-    throw new Error(`GitHub write error: ${JSON.stringify(err)}`)
-  }
-
+  const res = await fetch(`${GITHUB_API}/repos/${OWNER}/${REPO}/contents/${DB_PATH}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) { const err = await res.json(); throw new Error(`GitHub write error: ${JSON.stringify(err)}`) }
   const data = await res.json()
   const newSha = data.content.sha
   _cache = { db, sha: newSha, ts: Date.now() }
   return newSha
 }
 
-export async function updateDb(
-  updater: (db: DatabaseSchema) => DatabaseSchema | Promise<DatabaseSchema>
-): Promise<void> {
+export async function updateDb(updater: (db: DatabaseSchema) => DatabaseSchema | Promise<DatabaseSchema>): Promise<void> {
   const { db, sha } = await readDb()
   const updated = await updater(db)
   await writeDb(updated, sha)
 }
 
-// Getters pratiques
-export async function getCompanies(): Promise<Company[]> {
-  const { db } = await readDb()
-  return db.companies.filter(c => c.active)
-}
-
-export async function getCompanyBySlug(slug: string): Promise<Company | null> {
-  const { db } = await readDb()
-  return db.companies.find(c => c.slug === slug) || null
-}
-
-export async function getFilesByCompany(companyId: string): Promise<FileRecord[]> {
-  const { db } = await readDb()
-  return db.files.filter(f => f.companyId === companyId)
-}
-
-export async function getAdminByUsername(username: string): Promise<AdminUser | null> {
-  const { db } = await readDb()
-  return db.admins.find(a => a.username === username) || null
-}
-
-export async function getLogs(limit = 100): Promise<ActivityLog[]> {
-  const { db } = await readDb()
-  return [...db.logs].sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, limit)
-}
+export async function getCompanies(): Promise<Company[]> { const { db } = await readDb(); return db.companies.filter(c => c.active) }
+export async function getCompanyBySlug(slug: string): Promise<Company | null> { const { db } = await readDb(); return db.companies.find(c => c.slug === slug) || null }
+export async function getFilesByCompany(companyId: string): Promise<FileRecord[]> { const { db } = await readDb(); return db.files.filter(f => f.companyId === companyId) }
+export async function getAdminByUsername(username: string): Promise<AdminUser | null> { const { db } = await readDb(); return db.admins.find(a => a.username === username) || null }
+export async function getLogs(limit = 100): Promise<ActivityLog[]> { const { db } = await readDb(); return [...db.logs].sort((a,b) => b.timestamp.localeCompare(a.timestamp)).slice(0, limit) }
 
 export async function addLog(log: Omit<ActivityLog, 'id' | 'timestamp'>): Promise<void> {
   try {
     await updateDb((db) => {
-      const newLog: ActivityLog = {
-        ...log,
-        id: crypto.randomUUID(),
-        timestamp: new Date().toISOString(),
-      }
-      db.logs = [newLog, ...db.logs].slice(0, 500)
+      db.logs = [{ ...log, id: crypto.randomUUID(), timestamp: new Date().toISOString() }, ...db.logs].slice(0, 500)
       return db
     })
-  } catch (err) {
-    console.error('addLog error:', err)
-  }
+  } catch (err) { console.error('addLog error:', err) }
 }
