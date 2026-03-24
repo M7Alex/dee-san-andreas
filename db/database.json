@@ -6,7 +6,7 @@
       "passwordHash": "$2a$12$1SmzqIOSWBHrJJdgt9rZ8.EkNMk0mAR6Ad..5RrusXS1eJ3wMlFUG",
       "role": "superadmin",
       "createdAt": "2026-03-23T21:23:23.290Z",
-      "lastLogin": "2026-03-24T02:53:40.633Z"
+      "lastLogin": "2026-03-24T03:41:06.347Z"
     }
   ],
   "companies": [
@@ -930,6 +930,6 @@
   ],
   "meta": {
     "version": "1.0.0",
-    "lastUpdated": "2026-03-24T02:54:14.469Z"
+    "lastUpdated": "2026-03-24T03:41:06.347Z"
   }
 }
