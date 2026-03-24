@@ -9,6 +9,15 @@
       "action": "LOGIN_FAILED",
       "details": "Utilisateur introuvable",
       "ip": "82.123.57.213",
+      "id": "b0c4ca49-5079-41ca-af82-e6920842ac3d",
+      "timestamp": "2026-03-24T18:24:56.281Z"
+    },
+    {
+      "userId": "unknown",
+      "userLabel": "superadmin",
+      "action": "LOGIN_FAILED",
+      "details": "Utilisateur introuvable",
+      "ip": "82.123.57.213",
       "id": "06b87d0f-11e1-49e5-a911-e90dfb00082a",
       "timestamp": "2026-03-24T18:24:43.036Z"
     },
@@ -24,6 +33,6 @@
   ],
   "meta": {
     "version": "1.0.0",
-    "lastUpdated": "2026-03-24T18:24:43.036Z"
+    "lastUpdated": "2026-03-24T18:24:56.281Z"
   }
 }
