@@ -735,6 +735,15 @@
     {
       "userId": "116076ab-a1b6-4ff8-88d4-de2357dc82d6",
       "userLabel": "superadmin",
+      "action": "LOGIN_FAILED",
+      "details": "Mot de passe incorrect",
+      "ip": "82.123.57.213",
+      "id": "a7646b46-a5e5-4bf7-86af-eab3394e80bc",
+      "timestamp": "2026-03-24T01:29:15.915Z"
+    },
+    {
+      "userId": "116076ab-a1b6-4ff8-88d4-de2357dc82d6",
+      "userLabel": "superadmin",
       "action": "LOGIN_SUCCESS",
       "ip": "82.123.57.213",
       "id": "d27c4dc0-c30c-4e04-9605-b80301f4bd3f",
@@ -834,6 +843,6 @@
   ],
   "meta": {
     "version": "1.0.0",
-    "lastUpdated": "2026-03-24T01:12:58.254Z"
+    "lastUpdated": "2026-03-24T01:29:15.915Z"
   }
 }
