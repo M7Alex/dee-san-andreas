@@ -5,15 +5,10 @@ import { uploadFile } from '@/lib/blob'
 import { updateDb, addLog } from '@/lib/github-db'
 import { FolderType, FileRecord } from '@/types'
 
-// Augmenter la limite de taille pour les uploads
-export const config = {
-  api: {
-    bodyParser: false,
-    responseLimit: '10mb',
-  },
-}
-
 export const dynamic = 'force-dynamic'
+
+// Nouvelle syntaxe Next.js 14 pour la limite de taille
+export const maxDuration = 30
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,7 +28,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Données manquantes' }, { status: 400 })
     }
 
-    // Company users can only upload to their own company
     if (session.role === 'company' && session.companyId !== companyId) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
     }
