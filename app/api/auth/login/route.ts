@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAdminByUsername, addLog } from '@/lib/github-db'
+import { getAdminByUsername, addLog, updateDb } from '@/lib/github-db'
 import { verifyPassword, createToken, checkRateLimit, recordFailedAttempt, resetAttempts, sessionCookieOptions, COOKIE_NAME } from '@/lib/auth'
+
+export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for') || 'unknown'
   
-  // Rate limiting
   const rl = checkRateLimit(ip)
   if (!rl.allowed) {
     return NextResponse.json(
@@ -15,9 +16,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { username, password } = await req.json()
-  if (!username || !password) {
-    return NextResponse.json({ error: 'Champs manquants' }, { status: 400 })
-  }
+  if (!username || !password) return NextResponse.json({ error: 'Champs manquants' }, { status: 400 })
 
   const admin = await getAdminByUsername(username)
   if (!admin) {
@@ -34,6 +33,14 @@ export async function POST(req: NextRequest) {
   }
 
   resetAttempts(ip)
+  
+  // Mettre à jour lastLogin
+  await updateDb((db) => {
+    const a = db.admins.find(a => a.id === admin.id)
+    if (a) a.lastLogin = new Date().toISOString()
+    return db
+  })
+
   await addLog({ userId: admin.id, userLabel: username, action: 'LOGIN_SUCCESS', ip })
 
   const token = await createToken({ userId: admin.id, role: admin.role })

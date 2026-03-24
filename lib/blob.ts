@@ -34,7 +34,7 @@ export async function uploadFile(
   const pathname = `companies/${companySlug}/${folder}/${timestamp}_${safeName}`
 
   const blob = await put(pathname, file, {
-    access: 'public',
+    access: 'private', // ← corrigé : private au lieu de public
     addRandomSuffix: false,
   })
 
