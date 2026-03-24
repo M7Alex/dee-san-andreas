@@ -2,9 +2,19 @@
   "admins": [],
   "companies": [],
   "files": [],
-  "logs": [],
+  "logs": [
+    {
+      "userId": "unknown",
+      "userLabel": "superadmin",
+      "action": "LOGIN_FAILED",
+      "details": "Utilisateur introuvable",
+      "ip": "82.123.57.213",
+      "id": "ebd9f1bc-1096-4a3f-93ec-dcd0d428b73f",
+      "timestamp": "2026-03-24T18:24:37.748Z"
+    }
+  ],
   "meta": {
     "version": "1.0.0",
-    "lastUpdated": "2026-03-24T18:24:37.203Z"
+    "lastUpdated": "2026-03-24T18:24:37.748Z"
   }
 }
