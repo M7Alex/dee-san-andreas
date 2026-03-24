@@ -13,7 +13,7 @@ const MAX_SIZE = 10 * 1024 * 1024 // 10MB
 
 export function validateFile(file: File): { valid: boolean; error?: string } {
   if (!ALLOWED_TYPES.includes(file.type)) {
-    return { valid: false, error: 'Type de fichier non autorisé. Formats acceptés: PDF, DOCX, XLSX, PNG, JPEG' }
+    return { valid: false, error: 'Type non autorisé. Formats: PDF, DOCX, XLSX, PNG, JPEG' }
   }
   if (file.size > MAX_SIZE) {
     return { valid: false, error: 'Fichier trop volumineux. Maximum: 10MB' }
@@ -34,7 +34,7 @@ export async function uploadFile(
   const pathname = `companies/${companySlug}/${folder}/${timestamp}_${safeName}`
 
   const blob = await put(pathname, file, {
-    access: 'private', // ← corrigé : private au lieu de public
+    access: 'public',
     addRandomSuffix: false,
   })
 
