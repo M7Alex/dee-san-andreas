@@ -339,35 +339,29 @@ export default function CompanyPage() {
 
   const [authenticated, setAuthenticated] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [canUpload, setCanUpload] = useState(false)
   const [files, setFiles] = useState<FileRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [activeFolder, setActiveFolder] = useState<FolderType | 'all'>('all')
   const [search, setSearch] = useState('')
   const [dbCompany, setDbCompany] = useState<{ id: string; name: string } | null>(null)
 
-  // Bypass PIN pour admin/superadmin/consultant
+  // Check if admin session
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
-      if (d.authenticated) {
-        const role = d.session?.role
-        const perms = d.permissions
-        if (role === 'superadmin' || role === 'admin' || role === 'consultant') {
-          setIsAdmin(role === 'superadmin' || role === 'admin')
-          setCanUpload(perms?.canUploadFiles ?? (role !== 'consultant'))
-          setAuthenticated(true)
-        } else if (role === 'company' && d.session.companySlug === slug) {
-          setCanUpload(false)
-          setIsAdmin(false)
-          setAuthenticated(true)
-        }
+      if (d.authenticated && (d.session.role === 'admin' || d.session.role === 'superadmin')) {
+        setIsAdmin(true)
+        setAuthenticated(true)
+      } else if (d.authenticated && d.session.role === 'company' && d.session.companySlug === slug) {
+        setAuthenticated(true)
       }
     })
   }, [slug])
 
+  // Load files once authenticated
   useEffect(() => {
     if (!authenticated) return
     setLoading(true)
+    // Load company info + files
     fetch('/api/companies/list')
       .then(r => r.json())
       .then((companies) => {
@@ -415,6 +409,7 @@ export default function CompanyPage() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: company.color }}>
+      {/* Ambient glow */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full blur-3xl opacity-8"
           style={{ backgroundColor: company.accentColor }} />
@@ -422,13 +417,13 @@ export default function CompanyPage() {
           style={{ backgroundColor: company.accentColor }} />
       </div>
 
+      {/* Header */}
       <header className="sticky top-0 z-50 glass border-b border-white/5">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button onClick={() => { window.location.href = '/?from=company' }}
-              className="text-stone-500 hover:text-stone-300 transition-colors">
+            <Link href="/" className="text-stone-500 hover:text-stone-300 transition-colors">
               <ArrowLeft className="w-5 h-5" />
-            </button>
+            </Link>
             <div className="w-px h-6 bg-stone-700" />
             <div className="flex items-center gap-3">
               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: company.accentColor }} />
@@ -439,15 +434,9 @@ export default function CompanyPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {isAdmin && (
-              <button onClick={() => { window.location.href = '/dashboard' }}
-                className="flex items-center gap-1.5 text-xs text-gold-400 hover:text-gold-300 transition-colors px-3 py-1.5 rounded-lg bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/20">
-                ← Panel admin
-              </button>
-            )}
             <span className="flex items-center gap-1.5 text-xs text-stone-500">
               <Unlock className="w-3 h-3" style={{ color: company.accentColor }} />
-              {isAdmin ? 'Admin' : canUpload ? 'Consultant' : 'Accès entreprise'}
+              {isAdmin ? 'Admin' : 'Accès entreprise'}
             </span>
           </div>
         </div>
@@ -455,28 +444,41 @@ export default function CompanyPage() {
 
       <div className="max-w-6xl mx-auto px-6 py-8 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* ── Sidebar ── */}
           <aside className="lg:col-span-1 space-y-4">
+            {/* Folders */}
             <div className="glass rounded-2xl p-4 border border-white/5">
               <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">Dossiers</h3>
               <div className="space-y-1">
-                <button onClick={() => setActiveFolder('all')}
+                <button
+                  onClick={() => setActiveFolder('all')}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${
-                    activeFolder === 'all' ? 'text-white font-medium' : 'text-stone-400 hover:text-stone-200 hover:bg-white/5'
+                    activeFolder === 'all'
+                      ? 'text-white font-medium'
+                      : 'text-stone-400 hover:text-stone-200 hover:bg-white/5'
                   }`}
-                  style={activeFolder === 'all' ? { backgroundColor: `${company.accentColor}20`, color: company.accentColor } : {}}>
+                  style={activeFolder === 'all' ? { backgroundColor: `${company.accentColor}20`, color: company.accentColor } : {}}
+                >
                   <Folder className="w-4 h-4" />
                   Tous les fichiers
                   <span className="ml-auto text-xs opacity-60">{files.length}</span>
                 </button>
+
                 {FOLDERS.map((f) => {
                   const count = files.filter(file => file.folder === f).length
                   return (
-                    <button key={f} onClick={() => setActiveFolder(f)}
+                    <button
+                      key={f}
+                      onClick={() => setActiveFolder(f)}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${
-                        activeFolder === f ? 'text-white font-medium' : 'text-stone-400 hover:text-stone-200 hover:bg-white/5'
+                        activeFolder === f
+                          ? 'text-white font-medium'
+                          : 'text-stone-400 hover:text-stone-200 hover:bg-white/5'
                       }`}
-                      style={activeFolder === f ? { backgroundColor: `${company.accentColor}20`, color: company.accentColor } : {}}>
-                      <span>{FOLDER_ICONS[f]}</span>{f}
+                      style={activeFolder === f ? { backgroundColor: `${company.accentColor}20`, color: company.accentColor } : {}}
+                    >
+                      <span>{FOLDER_ICONS[f]}</span>
+                      {f}
                       <span className="ml-auto text-xs opacity-60">{count}</span>
                     </button>
                   )
@@ -484,7 +486,8 @@ export default function CompanyPage() {
               </div>
             </div>
 
-            {canUpload && dbCompany && (
+            {/* Upload */}
+            {dbCompany && (
               <div className="glass rounded-2xl p-4 border border-white/5">
                 <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">
                   Déposer dans: {activeFolder === 'all' ? 'Financier' : activeFolder}
@@ -497,22 +500,20 @@ export default function CompanyPage() {
                 />
               </div>
             )}
-
-            {!canUpload && (
-              <div className="glass rounded-2xl p-4 border border-white/5 text-center">
-                <Lock className="w-4 h-4 mx-auto mb-2 text-stone-600" />
-                <p className="text-xs text-stone-600">Accès lecture seule</p>
-                <p className="text-xs text-stone-700 mt-1">Téléchargement uniquement</p>
-              </div>
-            )}
           </aside>
 
+          {/* ── Main ── */}
           <main className="lg:col-span-3 space-y-4">
+            {/* Search bar */}
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-500" />
-              <input type="text" placeholder="Rechercher un fichier..." value={search}
+              <input
+                type="text"
+                placeholder="Rechercher un fichier..."
+                value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 rounded-xl bg-gov-800/80 border border-stone-700/50 focus:border-stone-600 text-white text-sm outline-none transition-all" />
+                className="w-full pl-11 pr-4 py-3 rounded-xl bg-gov-800/80 border border-stone-700/50 focus:border-stone-600 text-white text-sm outline-none transition-all"
+              />
               {search && (
                 <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300">
                   <X className="w-4 h-4" />
@@ -526,6 +527,7 @@ export default function CompanyPage() {
               </div>
             ) : (
               <>
+                {/* Pinned */}
                 {pinned.length > 0 && (
                   <div className="space-y-2">
                     <h3 className="text-xs font-semibold text-gold-400 uppercase tracking-wider flex items-center gap-2">
@@ -539,6 +541,8 @@ export default function CompanyPage() {
                     ))}
                   </div>
                 )}
+
+                {/* Regular */}
                 {regular.length > 0 ? (
                   <div className="space-y-2">
                     {pinned.length > 0 && <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Fichiers</h3>}
@@ -554,9 +558,7 @@ export default function CompanyPage() {
                     <div className="text-center py-20 text-stone-600">
                       <Folder className="w-12 h-12 mx-auto mb-3 opacity-30" />
                       <p className="text-sm">{search ? 'Aucun fichier trouvé' : 'Aucun fichier dans ce dossier'}</p>
-                      <p className="text-xs mt-1 opacity-60">
-                        {canUpload ? 'Déposez un fichier pour commencer' : 'Aucun fichier disponible'}
-                      </p>
+                      <p className="text-xs mt-1 opacity-60">Déposez un fichier pour commencer</p>
                     </div>
                   )
                 )}
