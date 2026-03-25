@@ -327,6 +327,10 @@ function UploadZone({ companyId, companySlug, folder, onUploaded }: {
             <p className="text-stone-600 text-xs mt-1">PDF, DOCX, XLSX, PNG, JPEG — 10MB max</p>
           </div>
         </div>
+      )}
+    </div>
+  )
+}
 
 // ─── Company Page ─────────────────────────────────────────────────────────────
 export default function CompanyPage() {
@@ -342,19 +346,17 @@ export default function CompanyPage() {
   const [search, setSearch] = useState('')
   const [dbCompany, setDbCompany] = useState<{ id: string; name: string } | null>(null)
 
-  // Check session — bypass PIN pour admin/superadmin/consultant
+  // Bypass PIN pour admin/superadmin/consultant
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
       if (d.authenticated) {
         const role = d.session?.role
         const perms = d.permissions
-        // Superadmin/admin/consultant bypass le PIN
         if (role === 'superadmin' || role === 'admin' || role === 'consultant') {
           setIsAdmin(role === 'superadmin' || role === 'admin')
           setCanUpload(perms?.canUploadFiles ?? (role !== 'consultant'))
           setAuthenticated(true)
         } else if (role === 'company' && d.session.companySlug === slug) {
-          // Visiteur entreprise: download only
           setCanUpload(false)
           setIsAdmin(false)
           setAuthenticated(true)
@@ -363,7 +365,6 @@ export default function CompanyPage() {
     })
   }, [slug])
 
-  // Load files once authenticated
   useEffect(() => {
     if (!authenticated) return
     setLoading(true)
@@ -424,9 +425,10 @@ export default function CompanyPage() {
       <header className="sticky top-0 z-50 glass border-b border-white/5">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/" className="text-stone-500 hover:text-stone-300 transition-colors">
+            <button onClick={() => { window.location.href = '/?from=company' }}
+              className="text-stone-500 hover:text-stone-300 transition-colors">
               <ArrowLeft className="w-5 h-5" />
-            </Link>
+            </button>
             <div className="w-px h-6 bg-stone-700" />
             <div className="flex items-center gap-3">
               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: company.accentColor }} />
@@ -438,10 +440,10 @@ export default function CompanyPage() {
           </div>
           <div className="flex items-center gap-3">
             {isAdmin && (
-              <Link href="/dashboard"
+              <button onClick={() => { window.location.href = '/dashboard' }}
                 className="flex items-center gap-1.5 text-xs text-gold-400 hover:text-gold-300 transition-colors px-3 py-1.5 rounded-lg bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/20">
                 ← Panel admin
-              </Link>
+              </button>
             )}
             <span className="flex items-center gap-1.5 text-xs text-stone-500">
               <Unlock className="w-3 h-3" style={{ color: company.accentColor }} />
@@ -482,7 +484,6 @@ export default function CompanyPage() {
               </div>
             </div>
 
-            {/* Upload — uniquement si canUpload */}
             {canUpload && dbCompany && (
               <div className="glass rounded-2xl p-4 border border-white/5">
                 <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">
@@ -497,7 +498,6 @@ export default function CompanyPage() {
               </div>
             )}
 
-            {/* Message lecture seule pour visiteurs */}
             {!canUpload && (
               <div className="glass rounded-2xl p-4 border border-white/5 text-center">
                 <Lock className="w-4 h-4 mx-auto mb-2 text-stone-600" />
