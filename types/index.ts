@@ -1,5 +1,6 @@
 export type UserRole = 'superadmin' | 'admin' | 'consultant' | 'company'
 
+// ─── Système de permissions ───────────────────────────────────────────────────
 export interface Permissions {
   canUploadFiles: boolean
   canDownloadFiles: boolean
@@ -11,8 +12,7 @@ export interface Permissions {
   canManageConsultants: boolean
   canManagePins: boolean
   canViewLogs: boolean
-  canViewConnexions: boolean
-  visibleTabs: Array<'dashboard' | 'companies' | 'logs' | 'pins' | 'admins' | 'connexions'>
+  visibleTabs: Array<'dashboard' | 'companies' | 'logs' | 'pins' | 'admins'>
 }
 
 export const DEFAULT_PERMISSIONS: Record<UserRole, Permissions> = {
@@ -27,8 +27,7 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, Permissions> = {
     canManageConsultants: true,
     canManagePins: true,
     canViewLogs: true,
-    canViewConnexions: true,
-    visibleTabs: ['dashboard', 'companies', 'logs', 'pins', 'admins', 'connexions'],
+    visibleTabs: ['dashboard', 'companies', 'logs', 'pins', 'admins'],
   },
   admin: {
     canUploadFiles: true,
@@ -41,7 +40,6 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, Permissions> = {
     canManageConsultants: true,
     canManagePins: false,
     canViewLogs: true,
-    canViewConnexions: false,
     visibleTabs: ['dashboard', 'companies', 'logs', 'admins'],
   },
   consultant: {
@@ -55,7 +53,6 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, Permissions> = {
     canManageConsultants: false,
     canManagePins: false,
     canViewLogs: false,
-    canViewConnexions: false,
     visibleTabs: ['dashboard', 'companies'],
   },
   company: {
@@ -69,7 +66,6 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, Permissions> = {
     canManageConsultants: false,
     canManagePins: false,
     canViewLogs: false,
-    canViewConnexions: false,
     visibleTabs: [],
   },
 }
@@ -99,6 +95,7 @@ export interface Company {
 }
 
 export type CompanyCategory = 'gouvernement' | 'restauration' | 'evenementiel' | 'utilitaire' | 'production'
+
 export type FolderType = 'Financier' | 'RH' | 'Contrats' | 'Logistique' | 'Stratégie'
 
 export interface FileRecord {
@@ -132,10 +129,19 @@ export interface ActivityLog {
 }
 
 export type LogAction =
-  | 'LOGIN_SUCCESS' | 'LOGIN_FAILED' | 'COMPANY_ACCESS'
-  | 'FILE_UPLOAD' | 'FILE_DELETE' | 'FILE_PIN' | 'FILE_UNPIN'
-  | 'PIN_REGENERATED' | 'ADMIN_CREATED' | 'CONSULTANT_CREATED'
-  | 'COMPANY_CREATED' | 'PERMISSIONS_UPDATED' | 'USER_DELETED'
+  | 'LOGIN_SUCCESS'
+  | 'LOGIN_FAILED'
+  | 'COMPANY_ACCESS'
+  | 'FILE_UPLOAD'
+  | 'FILE_DELETE'
+  | 'FILE_PIN'
+  | 'FILE_UNPIN'
+  | 'PIN_REGENERATED'
+  | 'ADMIN_CREATED'
+  | 'CONSULTANT_CREATED'
+  | 'COMPANY_CREATED'
+  | 'PERMISSIONS_UPDATED'
+  | 'USER_DELETED'
 
 export interface DatabaseSchema {
   admins: AdminUser[]

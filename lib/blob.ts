@@ -9,7 +9,7 @@ const ALLOWED_TYPES = [
   'image/jpg',
 ]
 
-const MAX_SIZE = 10 * 1024 * 1024
+const MAX_SIZE = 10 * 1024 * 1024 // 10MB
 
 export function validateFile(file: File): { valid: boolean; error?: string } {
   if (!ALLOWED_TYPES.includes(file.type)) {
@@ -33,7 +33,6 @@ export async function uploadFile(
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
   const pathname = `companies/${companySlug}/${folder}/${timestamp}_${safeName}`
 
-  // IMPORTANT: Vercel Blob gratuit exige access: 'public'
   const blob = await put(pathname, file, {
     access: 'public',
     addRandomSuffix: false,
