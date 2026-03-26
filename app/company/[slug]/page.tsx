@@ -1,56 +1,62 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useState, useEffect, useRef } from 'react'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { 
-  ArrowLeft, Lock, Unlock, Upload, FileText, Image, Sheet, 
+import {
+  ArrowLeft, Lock, Unlock, Upload, FileText,
   Trash2, Pin, PinOff, Search, Folder, Download, ExternalLink,
-  AlertCircle, Loader2, X, CheckCircle, ChevronDown
+  AlertCircle, Loader2, X
 } from 'lucide-react'
 import { COMPANIES } from '@/lib/companies-data'
 import { FileRecord, FolderType, Permissions, DEFAULT_PERMISSIONS } from '@/types'
 
 const FOLDERS: FolderType[] = ['Financier', 'RH', 'Contrats', 'Logistique', 'Stratégie']
-
 const FOLDER_ICONS: Record<FolderType, string> = {
-  Financier: '💰',
-  RH: '👥',
-  Contrats: '📋',
-  Logistique: '🚚',
-  'Stratégie': '🎯',
+  Financier: '💰', RH: '👥', Contrats: '📋', Logistique: '🚚', 'Stratégie': '🎯',
 }
 
-function getFileIcon(mimeType: string) {
-  if (mimeType === 'application/pdf') return <span className="text-red-400 font-bold text-xs">PDF</span>
-  if (mimeType.includes('word')) return <span className="text-blue-400 font-bold text-xs">DOC</span>
-  if (mimeType.includes('sheet')) return <span className="text-green-400 font-bold text-xs">XLS</span>
-  if (mimeType.startsWith('image/')) return <span className="text-purple-400 font-bold text-xs">IMG</span>
-  return <FileText className="w-4 h-4 text-stone-400" />
-}
-
-function formatSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+function formatSize(b: number) {
+  if (b < 1024) return `${b} B`
+  if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`
+  return `${(b / 1048576).toFixed(1)} MB`
 }
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+function FileTypeIcon({ mimeType }: { mimeType: string }) {
+  if (mimeType === 'application/pdf')
+    return <span className="text-red-400 font-bold text-xs bg-red-400/10 px-1.5 py-0.5 rounded">PDF</span>
+  if (mimeType.includes('word'))
+    return <span className="text-blue-400 font-bold text-xs bg-blue-400/10 px-1.5 py-0.5 rounded">DOC</span>
+  if (mimeType.includes('sheet') || mimeType.includes('excel'))
+    return <span className="text-green-400 font-bold text-xs bg-green-400/10 px-1.5 py-0.5 rounded">XLS</span>
+  if (mimeType.startsWith('image/'))
+    return <span className="text-purple-400 font-bold text-xs bg-purple-400/10 px-1.5 py-0.5 rounded">IMG</span>
+  return <FileText className="w-4 h-4 text-stone-400" />
+}
+
+// ─── Helpers pour les boutons ─────────────────────────────────────────────────
+// Pour un store PRIVÉ, on passe toujours par /api/files/download (proxy sécurisé)
+function getProxyUrl(blobUrl: string, mode: 'download' | 'inline') {
+  return `/api/files/download?url=${encodeURIComponent(blobUrl)}&mode=${mode}`
+}
+
 // ─── PIN Entry ────────────────────────────────────────────────────────────────
 function PinEntry({ companyName, slug, accentColor, onSuccess }: {
-  companyName: string
-  slug: string
-  accentColor: string
-  onSuccess: () => void
+  companyName: string; slug: string; accentColor: string; onSuccess: () => void
 }) {
   const [pins, setPins] = useState(['', '', '', ''])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [blocked, setBlocked] = useState(0)
-  const refs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)]
+  const r0 = useRef<HTMLInputElement>(null)
+  const r1 = useRef<HTMLInputElement>(null)
+  const r2 = useRef<HTMLInputElement>(null)
+  const r3 = useRef<HTMLInputElement>(null)
+  const refs = [r0, r1, r2, r3]
 
   useEffect(() => {
     if (blocked > 0) {
@@ -59,22 +65,8 @@ function PinEntry({ companyName, slug, accentColor, onSuccess }: {
     }
   }, [blocked])
 
-  const handleChange = (i: number, val: string) => {
-    if (!/^\d?$/.test(val)) return
-    const next = [...pins]
-    next[i] = val
-    setPins(next)
-    if (val && i < 3) refs[i + 1].current?.focus()
-    if (next.every(p => p)) submitPin(next.join(''))
-  }
-
-  const handleKeyDown = (i: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !pins[i] && i > 0) refs[i - 1].current?.focus()
-  }
-
   async function submitPin(pin: string) {
-    setLoading(true)
-    setError('')
+    setLoading(true); setError('')
     try {
       const res = await fetch('/api/auth/company', {
         method: 'POST',
@@ -83,24 +75,32 @@ function PinEntry({ companyName, slug, accentColor, onSuccess }: {
       })
       const data = await res.json()
       if (!res.ok) {
-        if (res.status === 429) setBlocked(data.retryAfter || 30)
+        if (res.status === 429) setBlocked(30)
         throw new Error(data.error || 'PIN incorrect')
       }
       onSuccess()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erreur')
       setPins(['', '', '', ''])
-      refs[0].current?.focus()
-    } finally {
-      setLoading(false)
-    }
+      setTimeout(() => refs[0].current?.focus(), 50)
+    } finally { setLoading(false) }
+  }
+
+  function handleChange(i: number, val: string) {
+    if (!/^\d?$/.test(val)) return
+    const next = [...pins]; next[i] = val; setPins(next)
+    if (val && i < 3) refs[i + 1].current?.focus()
+    if (next.every(p => p)) submitPin(next.join(''))
+  }
+
+  function handleKeyDown(i: number, e: React.KeyboardEvent) {
+    if (e.key === 'Backspace' && !pins[i] && i > 0) refs[i - 1].current?.focus()
   }
 
   return (
     <div className="min-h-screen bg-gov-900 flex items-center justify-center px-4">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-3xl opacity-10"
-          style={{ backgroundColor: accentColor }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-3xl opacity-10" style={{ backgroundColor: accentColor }} />
       </div>
       <div className="relative w-full max-w-sm">
         <Link href="/" className="inline-flex items-center gap-2 text-stone-500 hover:text-stone-300 text-sm mb-8 transition-colors">
@@ -115,42 +115,30 @@ function PinEntry({ companyName, slug, accentColor, onSuccess }: {
             <h1 className="font-serif text-xl font-bold text-white mb-1">{companyName}</h1>
             <p className="text-stone-500 text-sm">Entrez votre code PIN à 4 chiffres</p>
           </div>
-
           {error && (
             <div className="flex items-center gap-2 bg-red-950/50 border border-red-800/40 rounded-xl px-4 py-3 mb-6 text-red-400 text-sm">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              <span>{error}</span>
+              <AlertCircle className="w-4 h-4 flex-shrink-0" /><span>{error}</span>
             </div>
           )}
           {blocked > 0 && (
             <div className="text-center text-amber-400 text-sm mb-6">
-              Trop de tentatives. Réessayez dans <span className="font-mono font-bold">{blocked}s</span>
+              Réessayez dans <span className="font-mono font-bold">{blocked}s</span>
             </div>
           )}
-
           <div className="flex gap-3 justify-center mb-8">
             {pins.map((p, i) => (
-              <input
-                key={i}
-                ref={refs[i]}
-                type="text"
-                inputMode="numeric"
-                maxLength={1}
-                value={p}
-                onChange={(e) => handleChange(i, e.target.value)}
-                onKeyDown={(e) => handleKeyDown(i, e)}
+              <input key={i} ref={refs[i]} type="text" inputMode="numeric" maxLength={1} value={p}
+                onChange={e => handleChange(i, e.target.value)}
+                onKeyDown={e => handleKeyDown(i, e)}
                 disabled={loading || blocked > 0}
                 className="pin-digit disabled:opacity-40"
                 style={{ borderColor: p ? accentColor : undefined }}
-                autoFocus={i === 0}
-              />
+                autoFocus={i === 0} />
             ))}
           </div>
-
           {loading && (
             <div className="flex items-center justify-center gap-2 text-stone-400 text-sm">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Vérification...
+              <Loader2 className="w-4 h-4 animate-spin" />Vérification...
             </div>
           )}
         </div>
@@ -160,9 +148,10 @@ function PinEntry({ companyName, slug, accentColor, onSuccess }: {
 }
 
 // ─── File Row ─────────────────────────────────────────────────────────────────
-function FileRow({ file, isAdmin, onDelete, onPin }: {
+function FileRow({ file, canDelete, canPin, onDelete, onPin }: {
   file: FileRecord
-  isAdmin: boolean
+  canDelete: boolean
+  canPin: boolean
   onDelete: (id: string) => void
   onPin: (id: string, pinned: boolean) => void
 }) {
@@ -192,6 +181,10 @@ function FileRow({ file, isAdmin, onDelete, onPin }: {
     setPinning(false)
   }
 
+  // URLs via le proxy sécurisé (store privé)
+  const openUrl = getProxyUrl(file.blobUrl, 'inline')
+  const downloadUrl = getProxyUrl(file.blobUrl, 'download')
+
   return (
     <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all group ${
       file.pinned
@@ -199,7 +192,7 @@ function FileRow({ file, isAdmin, onDelete, onPin }: {
         : 'bg-gov-800/50 border-stone-800/50 hover:border-stone-700'
     }`}>
       <div className="w-10 h-10 rounded-lg bg-gov-700 flex items-center justify-center flex-shrink-0">
-        {getFileIcon(file.mimeType)}
+        <FileTypeIcon mimeType={file.mimeType} />
       </div>
 
       <div className="flex-1 min-w-0">
@@ -216,9 +209,11 @@ function FileRow({ file, isAdmin, onDelete, onPin }: {
         </div>
       </div>
 
+      {/* Boutons — visibles au hover */}
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Ouvrir dans le navigateur (inline) */}
         <a
-          href={file.blobUrl}
+          href={openUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="p-2 rounded-lg text-stone-500 hover:text-gold-400 hover:bg-gov-700 transition-all"
@@ -226,23 +221,34 @@ function FileRow({ file, isAdmin, onDelete, onPin }: {
         >
           <ExternalLink className="w-4 h-4" />
         </a>
+
+        {/* Télécharger (attachment) */}
         <a
-          href={file.blobUrl}
+          href={downloadUrl}
           download={file.name}
           className="p-2 rounded-lg text-stone-500 hover:text-blue-400 hover:bg-gov-700 transition-all"
           title="Télécharger"
         >
           <Download className="w-4 h-4" />
         </a>
-        <button
-          onClick={handlePin}
-          disabled={pinning}
-          className="p-2 rounded-lg text-stone-500 hover:text-gold-400 hover:bg-gov-700 transition-all disabled:opacity-40"
-          title={file.pinned ? 'Désépingler' : 'Épingler'}
-        >
-          {file.pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
-        </button>
-        {isAdmin && (
+
+        {/* Épingler */}
+        {canPin && (
+          <button
+            onClick={handlePin}
+            disabled={pinning}
+            className="p-2 rounded-lg text-stone-500 hover:text-gold-400 hover:bg-gov-700 transition-all disabled:opacity-40"
+            title={file.pinned ? 'Désépingler' : 'Épingler'}
+          >
+            {pinning
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : file.pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />
+            }
+          </button>
+        )}
+
+        {/* Supprimer */}
+        {canDelete && (
           <button
             onClick={handleDelete}
             disabled={deleting}
@@ -259,19 +265,16 @@ function FileRow({ file, isAdmin, onDelete, onPin }: {
 
 // ─── Upload Zone ──────────────────────────────────────────────────────────────
 function UploadZone({ companyId, companySlug, folder, onUploaded }: {
-  companyId: string
-  companySlug: string
-  folder: FolderType
-  onUploaded: (file: FileRecord) => void
+  companyId: string; companySlug: string; folder: FolderType; onUploaded: (f: FileRecord) => void
 }) {
   const [dragging, setDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState('')
+  const [uploadError, setUploadError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
   async function uploadFile(file: File) {
-    setUploading(true)
-    setProgress(`Envoi de ${file.name}...`)
+    setUploading(true); setProgress(`Envoi de ${file.name}...`); setUploadError('')
     try {
       const fd = new FormData()
       fd.append('file', file)
@@ -284,143 +287,149 @@ function UploadZone({ companyId, companySlug, folder, onUploaded }: {
       onUploaded(data.file)
       setProgress('')
     } catch (err: unknown) {
-      setProgress(err instanceof Error ? err.message : 'Erreur upload')
-    } finally {
-      setUploading(false)
-    }
+      setUploadError(err instanceof Error ? err.message : 'Erreur upload')
+      setProgress('')
+    } finally { setUploading(false) }
   }
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setDragging(false)
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault(); setDragging(false)
     const file = e.dataTransfer.files[0]
     if (file) uploadFile(file)
-  }, [folder])
+  }
 
   return (
-    <div
-      onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={handleDrop}
-      onClick={() => !uploading && inputRef.current?.click()}
-      className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
-        dragging ? 'border-gold-500 bg-gold-900/10' : 'border-stone-700 hover:border-stone-600 hover:bg-gov-800/30'
-      }`}
-    >
-      <input
-        ref={inputRef}
-        type="file"
-        className="hidden"
-        accept=".pdf,.docx,.xlsx,.png,.jpeg,.jpg"
-        onChange={(e) => e.target.files?.[0] && uploadFile(e.target.files[0])}
-      />
-      {uploading ? (
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-gold-400 animate-spin" />
-          <span className="text-stone-400 text-sm">{progress}</span>
-        </div>
-      ) : (
-        <div className="flex flex-col items-center gap-3">
-          <Upload className="w-8 h-8 text-stone-600" />
-          <div>
-            <p className="text-stone-400 text-sm font-medium">Glissez un fichier ou cliquez</p>
-            <p className="text-stone-600 text-xs mt-1">PDF, DOCX, XLSX, PNG, JPEG — 10MB max</p>
+    <div>
+      <div
+        onDragOver={e => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={handleDrop}
+        onClick={() => !uploading && inputRef.current?.click()}
+        className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
+          dragging ? 'border-gold-500 bg-gold-900/10' : 'border-stone-700 hover:border-stone-600 hover:bg-gov-800/30'
+        }`}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          className="hidden"
+          accept=".pdf,.docx,.xlsx,.png,.jpeg,.jpg"
+          onChange={e => e.target.files?.[0] && uploadFile(e.target.files[0])}
+        />
+        {uploading ? (
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="w-7 h-7 text-gold-400 animate-spin" />
+            <span className="text-stone-400 text-sm">{progress}</span>
           </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2">
+            <Upload className="w-7 h-7 text-stone-600" />
+            <p className="text-stone-400 text-sm font-medium">Glissez ou cliquez</p>
+            <p className="text-stone-600 text-xs">PDF, DOCX, XLSX, PNG, JPEG — 10MB max</p>
+          </div>
+        )}
+      </div>
+      {uploadError && (
+        <div className="mt-2 flex items-center gap-2 text-red-400 text-xs bg-red-950/30 rounded-lg px-3 py-2">
+          <AlertCircle className="w-3 h-3 flex-shrink-0" />{uploadError}
         </div>
       )}
     </div>
   )
 }
 
-// ─── Company Page ─────────────────────────────────────────────────────────────
+// ─── Company Page principale ──────────────────────────────────────────────────
 export default function CompanyPage() {
   const { slug } = useParams() as { slug: string }
   const company = COMPANIES.find(c => c.slug === slug)
 
   const [authenticated, setAuthenticated] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [userPerms, setUserPerms] = useState<Permissions | null>(null)
+  const [isStaff, setIsStaff] = useState(false) // admin, superadmin, consultant
+  const [permissions, setPermissions] = useState<Permissions | null>(null)
   const [files, setFiles] = useState<FileRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [activeFolder, setActiveFolder] = useState<FolderType | 'all'>('all')
   const [search, setSearch] = useState('')
   const [dbCompany, setDbCompany] = useState<{ id: string; name: string } | null>(null)
 
-  // Check if admin session
+  // Vérifier la session au montage
   useEffect(() => {
-    fetch('/api/auth/me').then(r => r.json()).then(d => {
-      if (!d.authenticated) return
-      const role = d.role ?? d.session?.role
-      const perms: Permissions = d.permissions ?? DEFAULT_PERMISSIONS[role] ?? DEFAULT_PERMISSIONS.consultant
-      // Bypass PIN pour tous les rôles staff (superadmin, admin, consultant)
-      if (role === 'superadmin' || role === 'admin' || role === 'consultant') {
-        setIsAdmin(true)
-        setAuthenticated(true)
-        setUserPerms(perms)
-      } else if (role === 'company') {
-        const companySlug = d.companySlug ?? d.session?.companySlug
-        if (companySlug === slug) setAuthenticated(true)
-      }
-    }).catch(() => {})
+    fetch('/api/auth/me')
+      .then(r => r.json())
+      .then(d => {
+        if (!d.authenticated) return
+        const role = d.role ?? d.session?.role
+        const perms: Permissions = d.permissions ?? DEFAULT_PERMISSIONS[role] ?? DEFAULT_PERMISSIONS.consultant
+
+        if (role === 'superadmin' || role === 'admin' || role === 'consultant') {
+          // Bypass PIN — accès direct pour le staff
+          setIsStaff(true)
+          setAuthenticated(true)
+          setPermissions(perms)
+        } else if (role === 'company') {
+          const cs = d.companySlug ?? d.session?.companySlug
+          if (cs === slug) setAuthenticated(true)
+        }
+      })
+      .catch(() => {})
   }, [slug])
 
-  // Load files once authenticated
+  // Charger les fichiers une fois authentifié
   useEffect(() => {
     if (!authenticated) return
     setLoading(true)
-    // Load company info + files
     fetch('/api/companies/list')
       .then(r => r.json())
-      .then((companies) => {
-        const c = companies.find((x: { slug: string; id: string; name: string }) => x.slug === slug)
+      .then(companies => {
+        const c = companies.find((x: { slug: string; id: string }) => x.slug === slug)
         if (c) {
           setDbCompany({ id: c.id, name: c.name })
           return fetch(`/api/files/list?companyId=${c.id}`)
         }
       })
       .then(r => r?.json())
-      .then(data => { if (data) setFiles(data) })
+      .then(data => { if (data && !data.error) setFiles(data) })
       .finally(() => setLoading(false))
   }, [authenticated, slug])
 
-  if (!company) {
-    return (
-      <div className="min-h-screen bg-gov-900 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="font-serif text-2xl text-white mb-2">Entreprise introuvable</h1>
-          <Link href="/" className="text-gold-400 hover:underline text-sm">Retour à l'accueil</Link>
-        </div>
+  if (!company) return (
+    <div className="min-h-screen bg-gov-900 flex items-center justify-center">
+      <div className="text-center">
+        <h1 className="font-serif text-2xl text-white mb-2">Entreprise introuvable</h1>
+        <Link href="/" className="text-gold-400 hover:underline text-sm">Retour à l'accueil</Link>
       </div>
-    )
-  }
+    </div>
+  )
 
-  if (!authenticated) {
-    return (
-      <PinEntry
-        companyName={company.name}
-        slug={slug}
-        accentColor={company.accentColor}
-        onSuccess={() => setAuthenticated(true)}
-      />
-    )
-  }
+  if (!authenticated) return (
+    <PinEntry
+      companyName={company.name}
+      slug={slug}
+      accentColor={company.accentColor}
+      onSuccess={() => setAuthenticated(true)}
+    />
+  )
+
+  // Permissions effectives
+  const canUpload = isStaff
+    ? (permissions?.canUploadFiles ?? true)
+    : true // les users entreprise peuvent uploader
+  const canDelete = isStaff && (permissions?.canDeleteFiles ?? true)
+  const canPin = permissions?.canPinFiles ?? isStaff
 
   const filtered = files.filter(f => {
     if (activeFolder !== 'all' && f.folder !== activeFolder) return false
     if (search && !f.name.toLowerCase().includes(search.toLowerCase())) return false
     return true
   })
-
   const pinned = filtered.filter(f => f.pinned)
   const regular = filtered.filter(f => !f.pinned)
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: company.color }}>
-      {/* Ambient glow */}
+      {/* Ambiance */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full blur-3xl opacity-8"
-          style={{ backgroundColor: company.accentColor }} />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full blur-3xl opacity-5"
           style={{ backgroundColor: company.accentColor }} />
       </div>
 
@@ -428,7 +437,7 @@ export default function CompanyPage() {
       <header className="sticky top-0 z-50 glass border-b border-white/5">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            {isAdmin ? (
+            {isStaff ? (
               <Link href="/dashboard" className="flex items-center gap-1.5 text-stone-500 hover:text-gold-400 text-sm transition-colors">
                 <ArrowLeft className="w-4 h-4" /> Dashboard
               </Link>
@@ -446,54 +455,44 @@ export default function CompanyPage() {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1.5 text-xs text-stone-500">
-              <Unlock className="w-3 h-3" style={{ color: company.accentColor }} />
-              {isAdmin ? (
-                <span className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-gold-400 animate-pulse"></span>
-                  Accès staff
-                </span>
-              ) : 'Accès entreprise'}
-            </span>
+          <div className="flex items-center gap-1.5 text-xs text-stone-500">
+            <Unlock className="w-3 h-3" style={{ color: company.accentColor }} />
+            {isStaff ? 'Accès staff' : 'Accès entreprise'}
           </div>
         </div>
       </header>
 
+      {/* Contenu */}
       <div className="max-w-6xl mx-auto px-6 py-8 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* ── Sidebar ── */}
+
+          {/* Sidebar dossiers + upload */}
           <aside className="lg:col-span-1 space-y-4">
-            {/* Folders */}
             <div className="glass rounded-2xl p-4 border border-white/5">
               <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">Dossiers</h3>
               <div className="space-y-1">
                 <button
                   onClick={() => setActiveFolder('all')}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${
-                    activeFolder === 'all'
-                      ? 'text-white font-medium'
-                      : 'text-stone-400 hover:text-stone-200 hover:bg-white/5'
-                  }`}
-                  style={activeFolder === 'all' ? { backgroundColor: `${company.accentColor}20`, color: company.accentColor } : {}}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all"
+                  style={activeFolder === 'all'
+                    ? { backgroundColor: `${company.accentColor}20`, color: company.accentColor }
+                    : { color: '#78716c' }
+                  }
                 >
                   <Folder className="w-4 h-4" />
                   Tous les fichiers
                   <span className="ml-auto text-xs opacity-60">{files.length}</span>
                 </button>
-
-                {FOLDERS.map((f) => {
+                {FOLDERS.map(f => {
                   const count = files.filter(file => file.folder === f).length
                   return (
-                    <button
-                      key={f}
+                    <button key={f}
                       onClick={() => setActiveFolder(f)}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${
-                        activeFolder === f
-                          ? 'text-white font-medium'
-                          : 'text-stone-400 hover:text-stone-200 hover:bg-white/5'
-                      }`}
-                      style={activeFolder === f ? { backgroundColor: `${company.accentColor}20`, color: company.accentColor } : {}}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all"
+                      style={activeFolder === f
+                        ? { backgroundColor: `${company.accentColor}20`, color: company.accentColor }
+                        : { color: '#78716c' }
+                      }
                     >
                       <span>{FOLDER_ICONS[f]}</span>
                       {f}
@@ -504,32 +503,31 @@ export default function CompanyPage() {
               </div>
             </div>
 
-            {/* Upload */}
-            {dbCompany && (
+            {canUpload && dbCompany && (
               <div className="glass rounded-2xl p-4 border border-white/5">
                 <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">
-                  Déposer dans: {activeFolder === 'all' ? 'Financier' : activeFolder}
+                  Déposer dans : {activeFolder === 'all' ? 'Financier' : activeFolder}
                 </h3>
                 <UploadZone
                   companyId={dbCompany.id}
                   companySlug={slug}
                   folder={activeFolder === 'all' ? 'Financier' : activeFolder}
-                  onUploaded={(f) => setFiles(prev => [f, ...prev])}
+                  onUploaded={f => setFiles(prev => [f, ...prev])}
                 />
               </div>
             )}
           </aside>
 
-          {/* ── Main ── */}
+          {/* Liste des fichiers */}
           <main className="lg:col-span-3 space-y-4">
-            {/* Search bar */}
+            {/* Barre de recherche */}
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-500" />
               <input
                 type="text"
                 placeholder="Rechercher un fichier..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={e => setSearch(e.target.value)}
                 className="w-full pl-11 pr-4 py-3 rounded-xl bg-gov-800/80 border border-stone-700/50 focus:border-stone-600 text-white text-sm outline-none transition-all"
               />
               {search && (
@@ -545,40 +543,44 @@ export default function CompanyPage() {
               </div>
             ) : (
               <>
-                {/* Pinned */}
+                {/* Épinglés */}
                 {pinned.length > 0 && (
                   <div className="space-y-2">
                     <h3 className="text-xs font-semibold text-gold-400 uppercase tracking-wider flex items-center gap-2">
                       <Pin className="w-3 h-3" /> Épinglés
                     </h3>
                     {pinned.map(f => (
-                      <FileRow key={f.id} file={f} isAdmin={isAdmin}
-                        onDelete={(id) => setFiles(prev => prev.filter(x => x.id !== id))}
+                      <FileRow key={f.id} file={f} canDelete={canDelete} canPin={canPin}
+                        onDelete={id => setFiles(prev => prev.filter(x => x.id !== id))}
                         onPin={(id, p) => setFiles(prev => prev.map(x => x.id === id ? { ...x, pinned: p } : x))}
                       />
                     ))}
                   </div>
                 )}
 
-                {/* Regular */}
+                {/* Autres fichiers */}
                 {regular.length > 0 ? (
                   <div className="space-y-2">
-                    {pinned.length > 0 && <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Fichiers</h3>}
+                    {pinned.length > 0 && (
+                      <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Fichiers</h3>
+                    )}
                     {regular.map(f => (
-                      <FileRow key={f.id} file={f} isAdmin={isAdmin}
-                        onDelete={(id) => setFiles(prev => prev.filter(x => x.id !== id))}
+                      <FileRow key={f.id} file={f} canDelete={canDelete} canPin={canPin}
+                        onDelete={id => setFiles(prev => prev.filter(x => x.id !== id))}
                         onPin={(id, p) => setFiles(prev => prev.map(x => x.id === id ? { ...x, pinned: p } : x))}
                       />
                     ))}
                   </div>
-                ) : (
-                  filtered.length === 0 && (
-                    <div className="text-center py-20 text-stone-600">
-                      <Folder className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                      <p className="text-sm">{search ? 'Aucun fichier trouvé' : 'Aucun fichier dans ce dossier'}</p>
+                ) : filtered.length === 0 && (
+                  <div className="text-center py-20 text-stone-600">
+                    <Folder className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">
+                      {search ? 'Aucun fichier trouvé' : 'Aucun fichier dans ce dossier'}
+                    </p>
+                    {canUpload && (
                       <p className="text-xs mt-1 opacity-60">Déposez un fichier pour commencer</p>
-                    </div>
-                  )
+                    )}
+                  </div>
                 )}
               </>
             )}
