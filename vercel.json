@@ -1,8 +1,8 @@
 {
+  "github": { "silent": true, "autoJobCancelation": true },
+  "ignoreCommand": "git log -1 --pretty=%B | grep -qE '^\\[db\\]'",
   "functions": {
-    "app/api/**": {
-      "maxDuration": 30
-    }
+    "app/api/**": { "maxDuration": 30 }
   },
   "headers": [
     {

@@ -96,6 +96,9 @@ function SidebarNav({ active, role, permissions, onTabChange }: {
         ))}
       </nav>
       <div className="p-4 border-t border-white/5">
+        <Link href="/" className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-stone-400 hover:text-gold-400 hover:bg-gold-500/10 transition-all mb-1">
+          <span className="w-4 h-4">🌐</span>Retour au site
+        </Link>
         <button onClick={async () => { await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/' }}
           className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-stone-500 hover:text-red-400 hover:bg-red-950/20 transition-all">
           <LogOut className="w-4 h-4" />Déconnexion

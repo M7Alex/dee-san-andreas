@@ -9,7 +9,7 @@ import {
   AlertCircle, Loader2, X, CheckCircle, ChevronDown
 } from 'lucide-react'
 import { COMPANIES } from '@/lib/companies-data'
-import { FileRecord, FolderType } from '@/types'
+import { FileRecord, FolderType, Permissions, DEFAULT_PERMISSIONS } from '@/types'
 
 const FOLDERS: FolderType[] = ['Financier', 'RH', 'Contrats', 'Logistique', 'Stratégie']
 
@@ -339,6 +339,7 @@ export default function CompanyPage() {
 
   const [authenticated, setAuthenticated] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [userPerms, setUserPerms] = useState<Permissions | null>(null)
   const [files, setFiles] = useState<FileRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [activeFolder, setActiveFolder] = useState<FolderType | 'all'>('all')
@@ -348,13 +349,19 @@ export default function CompanyPage() {
   // Check if admin session
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
-      if (d.authenticated && (d.session.role === 'admin' || d.session.role === 'superadmin')) {
+      if (!d.authenticated) return
+      const role = d.role ?? d.session?.role
+      const perms: Permissions = d.permissions ?? DEFAULT_PERMISSIONS[role] ?? DEFAULT_PERMISSIONS.consultant
+      // Bypass PIN pour tous les rôles staff (superadmin, admin, consultant)
+      if (role === 'superadmin' || role === 'admin' || role === 'consultant') {
         setIsAdmin(true)
         setAuthenticated(true)
-      } else if (d.authenticated && d.session.role === 'company' && d.session.companySlug === slug) {
-        setAuthenticated(true)
+        setUserPerms(perms)
+      } else if (role === 'company') {
+        const companySlug = d.companySlug ?? d.session?.companySlug
+        if (companySlug === slug) setAuthenticated(true)
       }
-    })
+    }).catch(() => {})
   }, [slug])
 
   // Load files once authenticated
@@ -421,9 +428,15 @@ export default function CompanyPage() {
       <header className="sticky top-0 z-50 glass border-b border-white/5">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/" className="text-stone-500 hover:text-stone-300 transition-colors">
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
+            {isAdmin ? (
+              <Link href="/dashboard" className="flex items-center gap-1.5 text-stone-500 hover:text-gold-400 text-sm transition-colors">
+                <ArrowLeft className="w-4 h-4" /> Dashboard
+              </Link>
+            ) : (
+              <Link href="/" className="text-stone-500 hover:text-stone-300 transition-colors">
+                <ArrowLeft className="w-5 h-5" />
+              </Link>
+            )}
             <div className="w-px h-6 bg-stone-700" />
             <div className="flex items-center gap-3">
               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: company.accentColor }} />
@@ -436,7 +449,12 @@ export default function CompanyPage() {
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1.5 text-xs text-stone-500">
               <Unlock className="w-3 h-3" style={{ color: company.accentColor }} />
-              {isAdmin ? 'Admin' : 'Accès entreprise'}
+              {isAdmin ? (
+                <span className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-gold-400 animate-pulse"></span>
+                  Accès staff
+                </span>
+              ) : 'Accès entreprise'}
             </span>
           </div>
         </div>

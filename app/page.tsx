@@ -627,10 +627,21 @@ function NavMenu() {
 
 // ─── Main Landing Page ────────────────────────────────────────────────────────
 export default function LandingPage() {
-  const [loading, setLoading] = useState(true)
+  // sessionStorage : loading screen seulement à la 1ère visite du site
+  const [loading, setLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
 
+  useEffect(() => {
+    const seen = sessionStorage.getItem('dee_loaded')
+    if (!seen) {
+      setLoading(true)
+    } else {
+      setLoaded(true)
+    }
+  }, [])
+
   const handleLoadDone = () => {
+    sessionStorage.setItem('dee_loaded', '1')
     setLoading(false)
     setTimeout(() => setLoaded(true), 100)
   }

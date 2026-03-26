@@ -1,23 +1,40 @@
+export const dynamic = 'force-dynamic'
+
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { verifyToken, COOKIE_NAME } from '@/lib/auth'
 import { readDb } from '@/lib/github-db'
 import { DEFAULT_PERMISSIONS, UserRole } from '@/types'
 
-export const dynamic = 'force-dynamic'
-
 export async function GET() {
-  const token = cookies().get(COOKIE_NAME)?.value
-  if (!token) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
-  const session = await verifyToken(token)
-  if (!session) return NextResponse.json({ error: 'Session invalide' }, { status: 401 })
+  try {
+    const token = cookies().get(COOKIE_NAME)?.value
+    if (!token) return NextResponse.json({ authenticated: false })
 
-  const { db } = await readDb()
-  const user = db.admins.find(a => a.id === session.userId)
-  const permissions = user?.permissions ?? DEFAULT_PERMISSIONS[session.role as UserRole] ?? DEFAULT_PERMISSIONS.consultant
+    const session = await verifyToken(token)
+    if (!session) return NextResponse.json({ authenticated: false })
 
-  return NextResponse.json({
-    ...session,
-    permissions,
-  })
+    // Pour les entreprises, pas besoin de lire la DB
+    if (session.role === 'company') {
+      return NextResponse.json({ authenticated: true, ...session, permissions: DEFAULT_PERMISSIONS.company })
+    }
+
+    // Pour les admins, récupérer les permissions depuis la DB
+    let permissions = DEFAULT_PERMISSIONS[session.role as UserRole] ?? DEFAULT_PERMISSIONS.consultant
+    try {
+      const { db } = await readDb()
+      const user = db.admins.find(a => a.id === session.userId)
+      if (user?.permissions) {
+        permissions = user.permissions
+      }
+    } catch {
+      // Si la DB est inaccessible, utiliser les permissions par défaut du rôle
+      // Le login reste fonctionnel
+    }
+
+    return NextResponse.json({ authenticated: true, ...session, permissions })
+  } catch (err) {
+    console.error('auth/me error:', err)
+    return NextResponse.json({ authenticated: false })
+  }
 }
