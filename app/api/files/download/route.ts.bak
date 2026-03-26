@@ -1,0 +1,26 @@
+import { get } from '@vercel/blob'
+import { NextResponse } from 'next/server'
+
+export const dynamic = 'force-dynamic' // important pour les fichiers privés
+export const maxDuration = 30 // si ton fichier est gros, augmente le temps max si besoin
+
+export async function GET(req: Request) {
+  const url = req.nextUrl.searchParams.get('url')
+  if (!url) return NextResponse.json({ error: 'URL manquante' }, { status: 400 })
+
+  try {
+    // Ici tu peux ajouter vérification auth si tu veux
+    const file = await get(url)
+    const data = await file.arrayBuffer()
+
+    return new Response(data, {
+      headers: {
+        'Content-Type': file.type,
+        'Content-Disposition': `attachment; filename="${file.name}"`, // attachment = download
+      },
+    })
+  } catch (err) {
+    console.error('Download error:', err)
+    return NextResponse.json({ error: 'Erreur téléchargement' }, { status: 500 })
+  }
+}
