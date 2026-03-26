@@ -33,6 +33,9 @@ export async function uploadFile(
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
   const pathname = `companies/${companySlug}/${folder}/${timestamp}_${safeName}`
 
+  console.log('[BLOB UPLOAD] ACCESS MODE = private')
+  console.log('[BLOB UPLOAD] PATHNAME =', pathname)
+
   const blob = await put(pathname, file, {
     access: 'private',
     addRandomSuffix: false,
