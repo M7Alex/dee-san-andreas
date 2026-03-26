@@ -37,17 +37,17 @@ const ROLE_COLORS: Record<string, string> = {
   consultant: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30',
 }
 
-const PERM_LABELS: { key: keyof Permissions; label: string; group: string }[] = [
-  { key: 'canUploadFiles', label: 'Upload de fichiers', group: 'Fichiers' },
-  { key: 'canDownloadFiles', label: 'Téléchargement de fichiers', group: 'Fichiers' },
-  { key: 'canDeleteFiles', label: 'Suppression de fichiers', group: 'Fichiers' },
-  { key: 'canPinFiles', label: 'Épinglage de fichiers', group: 'Fichiers' },
-  { key: 'canViewAllCompanies', label: 'Voir toutes les entreprises', group: 'Entreprises' },
-  { key: 'canManageCompanies', label: 'Gérer les entreprises', group: 'Entreprises' },
-  { key: 'canManageConsultants', label: 'Gérer les consultants', group: 'Accès' },
-  { key: 'canManageAdmins', label: 'Gérer les admins', group: 'Accès' },
-  { key: 'canManagePins', label: 'Gérer les PINs', group: 'Accès' },
-  { key: 'canViewLogs', label: 'Voir les journaux', group: 'Accès' },
+const PERM_LABELS: { key: keyof Permissions; label: string; group: string; desc: string }[] = [
+  { key: 'canUploadFiles', label: 'Upload de fichiers', group: '📁 Fichiers', desc: 'Peut déposer des fichiers dans les dossiers entreprise' },
+  { key: 'canDownloadFiles', label: 'Téléchargement de fichiers', group: '📁 Fichiers', desc: 'Peut télécharger les fichiers existants' },
+  { key: 'canDeleteFiles', label: 'Suppression de fichiers', group: '📁 Fichiers', desc: 'Peut supprimer des fichiers définitivement' },
+  { key: 'canPinFiles', label: 'Épingler des fichiers', group: '📁 Fichiers', desc: 'Peut marquer un fichier comme épinglé/prioritaire' },
+  { key: 'canViewAllCompanies', label: 'Voir toutes les entreprises', group: '🏢 Entreprises', desc: 'Accès à la liste complète des entreprises' },
+  { key: 'canManageCompanies', label: 'Gérer les entreprises', group: '🏢 Entreprises', desc: 'Peut créer, modifier et désactiver des entreprises' },
+  { key: 'canManageConsultants', label: 'Créer des comptes consultant', group: '👥 Utilisateurs', desc: 'Peut créer et supprimer des comptes consultant' },
+  { key: 'canManageAdmins', label: 'Créer des comptes admin', group: '👥 Utilisateurs', desc: 'Peut créer et supprimer des comptes admin (superadmin seulement)' },
+  { key: 'canManagePins', label: 'Gérer les PINs entreprise', group: '🔑 Accès', desc: 'Peut régénérer les PINs d\'accès des entreprises' },
+  { key: 'canViewLogs', label: 'Voir les journaux d\'activité', group: '🔑 Accès', desc: 'Accès à l\'historique complet des actions' },
 ]
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
@@ -108,6 +108,90 @@ function SidebarNav({ active, role, permissions, onTabChange }: {
   )
 }
 
+// ─── Modal changement de mot de passe (superadmin uniquement) ────────────────
+function ChangePasswordModal({ onClose }: { onClose: () => void }) {
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+  const [showCurrent, setShowCurrent] = useState(false)
+  const [showNext, setShowNext] = useState(false)
+
+  async function save() {
+    if (!current || !next || !confirm) return setError('Tous les champs sont requis')
+    if (next !== confirm) return setError('Les mots de passe ne correspondent pas')
+    if (next.length < 8) return setError('Minimum 8 caractères')
+    setSaving(true); setError('')
+    const res = await fetch('/api/admin/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword: current, newPassword: next }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setError(data.error); setSaving(false); return }
+    setSuccess(true); setSaving(false)
+    setTimeout(onClose, 1500)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="glass rounded-2xl border border-white/10 w-full max-w-md">
+        <div className="p-6 border-b border-white/5 flex items-center justify-between">
+          <h2 className="text-white font-semibold font-serif flex items-center gap-2">
+            <Lock className="w-4 h-4 text-gold-400" />Changer mon mot de passe
+          </h2>
+          <button onClick={onClose} className="text-stone-500 hover:text-white transition-all text-lg">✕</button>
+        </div>
+        <div className="p-6 space-y-4">
+          {success ? (
+            <div className="text-center py-4">
+              <div className="text-emerald-400 text-2xl mb-2">✓</div>
+              <p className="text-emerald-400 font-medium">Mot de passe mis à jour !</p>
+            </div>
+          ) : (
+            <>
+              <div className="relative">
+                <label className="text-xs text-stone-400 mb-1 block">Mot de passe actuel</label>
+                <input type={showCurrent ? 'text' : 'password'} value={current} onChange={e => setCurrent(e.target.value)}
+                  className="w-full bg-gov-800 border border-stone-700 rounded-xl px-4 py-2.5 pr-10 text-sm text-white outline-none focus:border-stone-500" />
+                <button onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 bottom-2.5 text-stone-500">
+                  {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <div className="relative">
+                <label className="text-xs text-stone-400 mb-1 block">Nouveau mot de passe</label>
+                <input type={showNext ? 'text' : 'password'} value={next} onChange={e => setNext(e.target.value)}
+                  className="w-full bg-gov-800 border border-stone-700 rounded-xl px-4 py-2.5 pr-10 text-sm text-white outline-none focus:border-stone-500" />
+                <button onClick={() => setShowNext(!showNext)} className="absolute right-3 bottom-2.5 text-stone-500">
+                  {showNext ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <div>
+                <label className="text-xs text-stone-400 mb-1 block">Confirmer le nouveau mot de passe</label>
+                <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
+                  className="w-full bg-gov-800 border border-stone-700 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-stone-500" />
+              </div>
+              {error && <p className="text-red-400 text-sm">{error}</p>}
+              <div className="flex gap-3 pt-2">
+                <button onClick={save} disabled={saving}
+                  className="flex-1 btn-gold py-2 rounded-xl text-sm font-semibold disabled:opacity-50">
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Mettre à jour'}
+                </button>
+                <button onClick={onClose}
+                  className="flex-1 px-4 py-2 rounded-xl text-sm text-stone-400 border border-stone-700 hover:border-stone-600 transition-all">
+                  Annuler
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Tableau de permissions ────────────────────────────────────────────────────
 function PermissionsEditor({
   userId, username, role, current, myRole, onSaved, onCancel
@@ -151,22 +235,25 @@ function PermissionsEditor({
             <div key={group}>
               <h3 className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-3">{group}</h3>
               <div className="space-y-2">
-                {PERM_LABELS.filter(p => p.group === group).map(({ key, label }) => {
+                {PERM_LABELS.filter(p => p.group === group).map(({ key, label, desc }) => {
                   const val = perms[key] as boolean
                   return (
                     <button
                       key={key}
                       onClick={() => canEdit && setPerms(p => ({ ...p, [key]: !val }))}
-                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all border ${
+                      className={`w-full flex items-start gap-3 px-4 py-3 rounded-xl text-sm transition-all border text-left ${
                         val
                           ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
                           : 'border-stone-700 bg-gov-800 text-stone-500'
                       } ${canEdit ? 'hover:border-stone-500 cursor-pointer' : 'cursor-not-allowed opacity-70'}`}
                     >
-                      {val
-                        ? <CheckSquare className="w-4 h-4 flex-shrink-0" />
-                        : <Square className="w-4 h-4 flex-shrink-0" />}
-                      {label}
+                      <span className="mt-0.5 flex-shrink-0">
+                        {val ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                      </span>
+                      <div>
+                        <div className="font-medium">{label}</div>
+                        <div className="text-xs opacity-60 mt-0.5">{desc}</div>
+                      </div>
                     </button>
                   )
                 })}
@@ -176,7 +263,8 @@ function PermissionsEditor({
 
           {/* Onglets visibles */}
           <div>
-            <h3 className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-3">Onglets visibles</h3>
+            <h3 className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-1">🖥️ Onglets visibles</h3>
+            <p className="text-xs text-stone-600 mb-3">Quels onglets du dashboard cet utilisateur peut voir</p>
             <div className="grid grid-cols-2 gap-2">
               {(['dashboard', 'companies', 'logs', 'pins', 'admins'] as const).map(tab => {
                 const active = perms.visibleTabs.includes(tab)
@@ -225,7 +313,7 @@ function PermissionsEditor({
 }
 
 // ─── User Manager (admins + consultants) ──────────────────────────────────────
-function UserManager({ myRole }: { myRole: string }) {
+function UserManager({ myRole, myUserId }: { myRole: string; myUserId: string }) {
   const [users, setUsers] = useState<(AdminUser & { permissions: Permissions })[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -236,9 +324,11 @@ function UserManager({ myRole }: { myRole: string }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [editingUser, setEditingUser] = useState<(AdminUser & { permissions: Permissions }) | null>(null)
+  const [showChangePassword, setShowChangePassword] = useState(false)
 
-  const canCreateAdmin = myRole === 'superadmin'
-  const canCreateConsultant = myRole === 'superadmin' || myRole === 'admin'
+  const isSuperAdmin = myRole === 'superadmin'
+  const canCreateAdmin = isSuperAdmin
+  const canCreateConsultant = isSuperAdmin || myRole === 'admin'
 
   useEffect(() => {
     fetch('/api/admin/admins').then(r => r.json()).then(data => {
@@ -272,7 +362,18 @@ function UserManager({ myRole }: { myRole: string }) {
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-gold-400 w-6 h-6" /></div>
 
-  const groups = { superadmin: users.filter(u => u.role === 'superadmin'), admin: users.filter(u => u.role === 'admin'), consultant: users.filter(u => u.role === 'consultant') }
+  const groups = {
+    superadmin: users.filter(u => u.role === 'superadmin'),
+    admin: users.filter(u => u.role === 'admin'),
+    consultant: users.filter(u => u.role === 'consultant')
+  }
+
+  // Un admin ne voit pas la section superadmin
+  const visibleGroups = [
+    ...(isSuperAdmin ? [{ label: 'Superadmin', key: 'superadmin', items: groups.superadmin }] : []),
+    { label: 'Admins', key: 'admin', items: groups.admin },
+    { label: 'Consultants', key: 'consultant', items: groups.consultant },
+  ]
 
   return (
     <div className="space-y-6">
@@ -291,8 +392,31 @@ function UserManager({ myRole }: { myRole: string }) {
         />
       )}
 
+      {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
+
+      {/* Bloc superadmin privé — visible seulement par lui-même */}
+      {isSuperAdmin && (
+        <div className="glass rounded-xl p-5 border border-gold-500/20 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-gold-400 text-lg">👑</span>
+              <div>
+                <div className="text-white font-semibold text-sm">Mon compte Superadmin</div>
+                <div className="text-xs text-stone-500">Zone privée — visible uniquement par vous</div>
+              </div>
+            </div>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${ROLE_COLORS['superadmin']}`}>superadmin</span>
+          </div>
+          <button
+            onClick={() => setShowChangePassword(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gold-500/10 text-gold-400 border border-gold-500/20 text-sm hover:bg-gold-500/20 transition-all">
+            <Lock className="w-4 h-4" />Changer mon mot de passe
+          </button>
+        </div>
+      )}
+
       <div className="glass rounded-xl p-4 border border-gold-600/10 text-sm text-stone-400">
-        🏛️ <strong className="text-white">Hiérarchie :</strong> Superadmin → Admin → Consultant. Chaque niveau peut gérer les niveaux inférieurs.
+        🏛️ <strong className="text-white">Hiérarchie :</strong> Superadmin → Admin → Consultant. Chaque niveau ne peut gérer que les niveaux inférieurs.
       </div>
 
       {(canCreateAdmin || canCreateConsultant) && (
@@ -345,48 +469,51 @@ function UserManager({ myRole }: { myRole: string }) {
       )}
 
       {/* Liste par rôle */}
-      {[
-        { label: 'Superadmin', key: 'superadmin', items: groups.superadmin },
-        { label: 'Admins', key: 'admin', items: groups.admin },
-        { label: 'Consultants', key: 'consultant', items: groups.consultant },
-      ].map(({ label, key, items }) => items.length > 0 && (
+      {visibleGroups.map(({ label, key, items }) => items.length > 0 && (
         <div key={key}>
           <h3 className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-3">{label}</h3>
           <div className="space-y-2">
-            {items.map(user => (
-              <div key={user.id} className="glass rounded-xl p-4 border border-white/5 flex items-center gap-4">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 ${ROLE_COLORS[user.role] || ''}`}>
-                  {user.username.slice(0, 2).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-white font-medium text-sm">{user.username}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${ROLE_COLORS[user.role] || ''}`}>{user.role}</span>
+            {items.map(user => {
+              const isMe = user.id === myUserId
+              const canEditUser = !isMe && (
+                isSuperAdmin
+                  ? user.role !== 'superadmin'
+                  : myRole === 'admin' && user.role === 'consultant'
+              )
+              return (
+                <div key={user.id} className={`glass rounded-xl p-4 border flex items-center gap-4 ${isMe && isSuperAdmin ? 'border-gold-500/20' : 'border-white/5'}`}>
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 ${ROLE_COLORS[user.role] || ''}`}>
+                    {user.username.slice(0, 2).toUpperCase()}
                   </div>
-                  <div className="text-xs text-stone-600 mt-0.5">
-                    Créé le {new Date(user.createdAt).toLocaleDateString('fr-FR')}
-                    {user.lastLogin && ` · Dernière connexion: ${new Date(user.lastLogin).toLocaleDateString('fr-FR')}`}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-white font-medium text-sm">{user.username}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${ROLE_COLORS[user.role] || ''}`}>{user.role}</span>
+                      {isMe && <span className="text-xs text-stone-500 italic">— vous</span>}
+                    </div>
+                    <div className="text-xs text-stone-600 mt-0.5">
+                      Créé le {new Date(user.createdAt).toLocaleDateString('fr-FR')}
+                      {user.lastLogin && ` · Dernière connexion: ${new Date(user.lastLogin).toLocaleDateString('fr-FR')}`}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {canEditUser && (
+                      <button onClick={() => setEditingUser(user)}
+                        className="p-2 rounded-lg text-stone-500 hover:text-gold-400 hover:bg-gold-500/10 transition-all"
+                        title="Gérer les permissions">
+                        <Settings className="w-4 h-4" />
+                      </button>
+                    )}
+                    {canEditUser && (
+                      <button onClick={() => deleteUser(user.id, user.username)}
+                        className="p-2 rounded-lg text-stone-600 hover:text-red-400 hover:bg-red-950/20 transition-all">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {/* Bouton permissions */}
-                  {user.role !== 'superadmin' && (myRole === 'superadmin' || (myRole === 'admin' && user.role === 'consultant')) && (
-                    <button onClick={() => setEditingUser(user)}
-                      className="p-2 rounded-lg text-stone-500 hover:text-gold-400 hover:bg-gold-500/10 transition-all"
-                      title="Gérer les permissions">
-                      <Settings className="w-4 h-4" />
-                    </button>
-                  )}
-                  {/* Bouton supprimer */}
-                  {user.role !== 'superadmin' && (myRole === 'superadmin' || (myRole === 'admin' && user.role === 'consultant')) && (
-                    <button onClick={() => deleteUser(user.id, user.username)}
-                      className="p-2 rounded-lg text-stone-600 hover:text-red-400 hover:bg-red-950/20 transition-all">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       ))}
@@ -659,6 +786,7 @@ export default function DashboardPage() {
   const router = useRouter()
   const [tab, setTab] = useState('dashboard')
   const [role, setRole] = useState('')
+  const [userId, setUserId] = useState('')
   const [permissions, setPermissions] = useState<Permissions | null>(null)
   const [stats, setStats] = useState<Record<string, unknown> | null>(null)
   const [checking, setChecking] = useState(true)
@@ -667,6 +795,7 @@ export default function DashboardPage() {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
       if (d.error || d.role === 'company') { router.push('/login'); return }
       setRole(d.role)
+      setUserId(d.userId ?? '')
       setPermissions(d.permissions ?? DEFAULT_PERMISSIONS[d.role as UserRole])
       setChecking(false)
     })
@@ -703,7 +832,7 @@ export default function DashboardPage() {
           {tab === 'companies' && <CompaniesList />}
           {tab === 'logs' && <LogsView />}
           {tab === 'pins' && <PinManager />}
-          {tab === 'admins' && <UserManager myRole={role} />}
+          {tab === 'admins' && <UserManager myRole={role} myUserId={userId} />}
           {tab === 'connexions' && role === 'superadmin' && <ConnexionsAdmins />}
         </main>
       </div>
