@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { getCompaniesByCategory, CATEGORY_LABELS, CATEGORY_ICONS } from '@/lib/companies-data'
 import { ChevronDown, ExternalLink, Shield, BarChart3, FileText, Users } from 'lucide-react'
@@ -630,6 +630,15 @@ export default function LandingPage() {
   // sessionStorage : loading screen seulement à la 1ère visite du site
   const [loading, setLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => r.json()).then(d => {
+      if (d.authenticated && (d.role === 'admin' || d.role === 'superadmin' || d.role === 'consultant')) {
+        setIsAdmin(true)
+      }
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     const seen = sessionStorage.getItem('dee_loaded')
@@ -671,12 +680,21 @@ export default function LandingPage() {
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <Link
-                href="/login"
-                className="text-sm text-stone-400 hover:text-gold-400 transition-colors px-4 py-1.5 rounded-lg hover:bg-gov-700"
-              >
-                Connexion Admin
-              </Link>
+              {isAdmin ? (
+                <Link
+                  href="/dashboard"
+                  className="text-sm text-gold-400 hover:text-gold-300 transition-colors px-4 py-1.5 rounded-lg hover:bg-gov-700 border border-gold-600/30"
+                >
+                  ← Dashboard
+                </Link>
+              ) : (
+                <Link
+                  href="/login"
+                  className="text-sm text-stone-400 hover:text-gold-400 transition-colors px-4 py-1.5 rounded-lg hover:bg-gov-700"
+                >
+                  Connexion Admin
+                </Link>
+              )}
             </div>
           </div>
         </header>
@@ -718,12 +736,21 @@ export default function LandingPage() {
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 mb-16">
-              <Link
-                href="/login"
-                className="btn-gold px-8 py-3 rounded-xl font-semibold text-sm tracking-wide shadow-lg shadow-gold-600/20"
-              >
-                Accès Administration
-              </Link>
+              {isAdmin ? (
+                <Link
+                  href="/dashboard"
+                  className="btn-gold px-8 py-3 rounded-xl font-semibold text-sm tracking-wide shadow-lg shadow-gold-600/20"
+                >
+                  ← Retour au dashboard
+                </Link>
+              ) : (
+                <Link
+                  href="/login"
+                  className="btn-gold px-8 py-3 rounded-xl font-semibold text-sm tracking-wide shadow-lg shadow-gold-600/20"
+                >
+                  Accès Administration
+                </Link>
+              )}
               <a
                 href="#entreprises"
                 className="px-8 py-3 rounded-xl font-semibold text-sm tracking-wide border border-stone-700 text-stone-300 hover:border-gold-600/40 hover:text-gold-400 transition-all"
