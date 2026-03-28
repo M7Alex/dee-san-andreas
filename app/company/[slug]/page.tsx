@@ -139,6 +139,7 @@ function PinEntry({ companyName, slug, accentColor, onSuccess }: {
         </div>
       </div>
     </div>
+  </>
   )
 }
 
@@ -309,8 +310,8 @@ function FolderSidebar({
   const renameRef = useRef<HTMLInputElement>(null)
 
   // Tous les dossiers : défauts + custom (sans sous-dossiers pour l'instant)
-  const defaultItems = DEFAULT_FOLDERS.map(name => ({ id: `default-${name}`, name, isDefault: true }))
-  const customItems = customFolders.filter(f => !f.parentId).map(f => ({ ...f, isDefault: false }))
+  const defaultItems = DEFAULT_FOLDERS.map(name => ({ id: `default-${name}`, name, isDefault: true, locked: false }))
+  const customItems = customFolders.filter(f => !f.parentId).map(f => ({ ...f, isDefault: false, locked: !!f.lockPin }))
   const allFolders = [...defaultItems, ...customItems]
 
   useEffect(() => { if (creating) setTimeout(() => inputRef.current?.focus(), 50) }, [creating])
@@ -425,6 +426,7 @@ function FolderSidebar({
                   <span className="text-base flex-shrink-0">{folderIcon(name)}</span>
                   <span className="flex-1 text-left truncate">{name}</span>
                   <span className="text-xs opacity-60">{count}</span>
+                  {(allFolders.find(af => af.id === id) as { locked?: boolean })?.locked && <span title="Dossier confidentiel">🔒</span>}
 
                   {/* Actions renommer / supprimer — seulement custom, au hover */}
                   {isStaff && !isDefault && hovered === id && (
@@ -493,6 +495,8 @@ export default function CompanyPage() {
   const [permissions, setPermissions] = useState<Permissions | null>(null)
   const [files, setFiles] = useState<FileRecord[]>([])
   const [customFolders, setCustomFolders] = useState<CustomFolder[]>([])
+  const [unlockedFolders, setUnlockedFolders] = useState<Set<string>>(new Set())
+  const [lockModal, setLockModal] = useState<{ folder: CustomFolder } | null>(null)
   const [loading, setLoading] = useState(false)
   const [activeFolder, setActiveFolder] = useState('all')
   const [search, setSearch] = useState('')
@@ -557,12 +561,77 @@ export default function CompanyPage() {
   const filtered = files.filter(f => {
     if (activeFolder !== 'all' && f.folder !== activeFolder) return false
     if (search && !f.name.toLowerCase().includes(search.toLowerCase())) return false
+    // Masquer les fichiers d'un dossier verrouillé si non déverrouillé
+    const folder = customFolders.find(cf => cf.name === f.folder)
+    if (folder?.lockPin && !unlockedFolders.has(folder.id)) return false
     return true
   })
   const pinned = filtered.filter(f => f.pinned)
   const regular = filtered.filter(f => !f.pinned)
 
+
+  // ─── Modal déverrouillage dossier ──────────────────────────────────────────
+  const [lockPinInput, setLockPinInput] = useState(['', '', '', ''])
+  const [lockPinError, setLockPinError] = useState('')
+  const [lockPinLoading, setLockPinLoading] = useState(false)
+  const lockPinRefs = [
+    useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null),
+  ]
+
+  async function submitFolderPin(pin: string, folder: CustomFolder) {
+    setLockPinLoading(true); setLockPinError('')
+    const res = await fetch(`/api/files/folders/lock?folderId=${folder.id}&pin=${pin}`)
+    const data = await res.json()
+    if (!res.ok) {
+      setLockPinError(data.error || 'Code incorrect')
+      setLockPinInput(['', '', '', ''])
+      setTimeout(() => lockPinRefs[0].current?.focus(), 50)
+      setLockPinLoading(false)
+      return
+    }
+    setUnlockedFolders(prev => new Set([...prev, folder.id]))
+    setActiveFolder(folder.name)
+    setLockModal(null); setLockPinInput(['', '', '', '']); setLockPinLoading(false)
+  }
+
   return (
+    <>
+    {lockModal && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="glass rounded-2xl border border-amber-500/20 w-full max-w-sm p-8">
+          <div className="text-center mb-6">
+            <div className="text-4xl mb-3">🔒</div>
+            <h2 className="text-white font-serif font-bold mb-1">Dossier confidentiel</h2>
+            <p className="text-stone-500 text-sm">"{lockModal.folder.name}" est protégé par un code.</p>
+          </div>
+          {lockPinError && (
+            <div className="flex items-center gap-2 bg-red-950/50 border border-red-800/40 rounded-xl px-4 py-3 mb-4 text-red-400 text-sm">
+              <span>{lockPinError}</span>
+            </div>
+          )}
+          <div className="flex gap-3 justify-center mb-6">
+            {lockPinInput.map((p, i) => (
+              <input key={i} ref={lockPinRefs[i]} type="text" inputMode="numeric" maxLength={1} value={p}
+                onChange={e => {
+                  if (!/^\d?$/.test(e.target.value)) return
+                  const next = [...lockPinInput]; next[i] = e.target.value; setLockPinInput(next)
+                  if (e.target.value && i < 3) lockPinRefs[i + 1].current?.focus()
+                  if (next.every(v => v)) submitFolderPin(next.join(''), lockModal.folder)
+                }}
+                onKeyDown={e => { if (e.key === 'Backspace' && !p && i > 0) lockPinRefs[i - 1].current?.focus() }}
+                className="w-12 h-14 text-center text-xl font-mono bg-gov-800 border-2 border-stone-700 rounded-xl text-white outline-none focus:border-amber-500"
+                autoFocus={i === 0} />
+            ))}
+          </div>
+          {lockPinLoading && <div className="flex justify-center mb-4"><Loader2 className="w-5 h-5 animate-spin text-amber-400" /></div>}
+          <button onClick={() => { setLockModal(null); setLockPinInput(['', '', '', '']); setLockPinError('') }}
+            className="w-full py-2 rounded-xl text-sm text-stone-500 hover:text-stone-300 transition-all">
+            Annuler
+          </button>
+        </div>
+      </div>
+    )}
     <div className="min-h-screen" style={{ backgroundColor: company.color }}>
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full blur-3xl opacity-8"
@@ -608,7 +677,19 @@ export default function CompanyPage() {
               accentColor={company.accentColor}
               isStaff={isStaff}
               customFolders={customFolders}
-              onFolderChange={setActiveFolder}
+              onFolderChange={(name) => {
+              const folder = customFolders.find(f => f.name === name)
+              if (folder?.lockPin && !unlockedFolders.has(folder.id) && !isStaff) {
+                setLockModal({ folder })
+                return
+              }
+              if (folder?.lockPin && !unlockedFolders.has(folder.id)) {
+                // staff with canUnlockFolders can also be blocked
+                setLockModal({ folder })
+                return
+              }
+              setActiveFolder(name)
+            }}
               onFoldersUpdate={setCustomFolders}
             />
 

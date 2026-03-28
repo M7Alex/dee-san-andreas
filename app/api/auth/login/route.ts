@@ -4,12 +4,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAdminByUsername, addLog, updateDb } from '@/lib/github-db'
 import {
   verifyPassword, createToken, checkRateLimit,
-  recordFailedAttempt, resetAttempts, sessionCookieOptions, COOKIE_NAME
+  recordFailedAttempt, resetAttempts, sessionCookieOptions, COOKIE_NAME, hashIp
 } from '@/lib/auth'
 import { DEFAULT_PERMISSIONS, UserRole } from '@/types'
 
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for') || 'unknown'
+  const rawIp = req.headers.get('x-forwarded-for') || 'unknown'
+  const ip = await hashIp(rawIp)
 
   try {
     const rl = checkRateLimit(ip)

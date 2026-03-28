@@ -4,11 +4,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { readDb, addLog } from '@/lib/github-db'
 import {
   verifyPin, createToken, checkRateLimit,
-  recordFailedAttempt, resetAttempts, sessionCookieOptions, COOKIE_NAME
+  recordFailedAttempt, resetAttempts, sessionCookieOptions, COOKIE_NAME, hashIp
 } from '@/lib/auth'
 
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for') || 'unknown'
+  const rawIp = req.headers.get('x-forwarded-for') || 'unknown'
+  const ip = await hashIp(rawIp)
 
   try {
     const rl = checkRateLimit(ip)

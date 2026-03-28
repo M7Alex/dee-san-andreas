@@ -12,7 +12,8 @@ export interface Permissions {
   canManageConsultants: boolean
   canManagePins: boolean
   canViewLogs: boolean
-  visibleTabs: Array<'dashboard' | 'companies' | 'logs' | 'pins' | 'admins'>
+  canUnlockFolders: boolean
+  visibleTabs: Array<'dashboard' | 'companies' | 'logs' | 'pins' | 'admins' | 'folders'>
 }
 
 export const DEFAULT_PERMISSIONS: Record<UserRole, Permissions> = {
@@ -27,7 +28,8 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, Permissions> = {
     canManageConsultants: true,
     canManagePins: true,
     canViewLogs: true,
-    visibleTabs: ['dashboard', 'companies', 'logs', 'pins', 'admins'],
+    canUnlockFolders: true,
+    visibleTabs: ['dashboard', 'companies', 'logs', 'pins', 'admins', 'folders'],
   },
   admin: {
     canUploadFiles: true,
@@ -40,6 +42,7 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, Permissions> = {
     canManageConsultants: true,
     canManagePins: false,
     canViewLogs: true,
+    canUnlockFolders: true,
     visibleTabs: ['dashboard', 'companies', 'logs', 'admins'],
   },
   consultant: {
@@ -53,6 +56,7 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, Permissions> = {
     canManageConsultants: false,
     canManagePins: false,
     canViewLogs: false,
+    canUnlockFolders: false,
     visibleTabs: ['dashboard', 'companies'],
   },
   company: {
@@ -66,6 +70,7 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, Permissions> = {
     canManageConsultants: false,
     canManagePins: false,
     canViewLogs: false,
+    canUnlockFolders: false,
     visibleTabs: [],
   },
 }
@@ -104,7 +109,9 @@ export interface CustomFolder {
   id: string
   name: string
   companyId: string
-  parentId?: string   // sous-dossier si défini
+  parentId?: string
+  lockPin?: string    // bcrypt hash du PIN de verrou
+  lockedBy?: string   // userId qui a verrouillé
   createdAt: string
   createdBy: string
 }
@@ -156,6 +163,10 @@ export type LogAction =
   | 'FOLDER_CREATED'
   | 'FOLDER_RENAMED'
   | 'FOLDER_DELETED'
+  | 'FOLDER_LOCKED'
+  | 'FOLDER_UNLOCKED'
+  | 'FILE_VIEW'
+  | 'FILE_DOWNLOAD'
 
 export interface DatabaseSchema {
   admins: AdminUser[]

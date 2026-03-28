@@ -50,6 +50,19 @@ export async function verifyPin(pin: string, hash: string): Promise<boolean> {
   return bcrypt.compare(pin, hash)
 }
 
+
+// ─── IP Hashing (SHA-256, déterministe, non-réversible) ──────────────────────
+
+export async function hashIp(ip: string): Promise<string> {
+  const encoder = new TextEncoder()
+  // On sale avec un préfixe fixe pour éviter les rainbow tables simples
+  const data = encoder.encode('dee-ip-v1:' + ip)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  // Format court : 8 premiers octets en hex (16 chars) pour lisibilité
+  return hashArray.slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 // ─── Rate limiter (in-memory, per IP) ────────────────────────────────────────
 
 const rateLimitMap = new Map<string, { attempts: number; blockUntil?: number }>()

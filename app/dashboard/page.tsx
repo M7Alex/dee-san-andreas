@@ -8,27 +8,34 @@ import {
   ScrollText, LogOut, Search, Upload, Clock, Users,
   RefreshCw, Loader2, Copy, Check, Plus, Trash2,
   Eye, EyeOff, ChevronRight, UserCheck, Settings,
-  CheckSquare, Square, Lock
+  CheckSquare, Square, Lock, Unlock, Folder, FolderLock, X, Filter
 } from 'lucide-react'
-import { ActivityLog, Company, AdminUser, Permissions, DEFAULT_PERMISSIONS, UserRole } from '@/types'
+import { ActivityLog, Company, AdminUser, Permissions, DEFAULT_PERMISSIONS, UserRole, CustomFolder } from '@/types'
 import { CATEGORY_LABELS, CATEGORY_ICONS, COMPANIES } from '@/lib/companies-data'
 import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
-const ACTION_LABELS: Record<string, { label: string; color: string; icon: string }> = {
-  LOGIN_SUCCESS: { label: 'Connexion', color: 'text-green-400', icon: '🔓' },
-  LOGIN_FAILED: { label: 'Échec connexion', color: 'text-red-400', icon: '🚫' },
-  COMPANY_ACCESS: { label: 'Accès entreprise', color: 'text-blue-400', icon: '🏢' },
-  FILE_UPLOAD: { label: 'Upload fichier', color: 'text-gold-400', icon: '📤' },
-  FILE_DELETE: { label: 'Suppression', color: 'text-red-400', icon: '🗑️' },
-  FILE_PIN: { label: 'Épinglage', color: 'text-amber-400', icon: '📌' },
-  FILE_UNPIN: { label: 'Désépinglage', color: 'text-stone-400', icon: '📌' },
-  PIN_REGENERATED: { label: 'PIN modifié', color: 'text-purple-400', icon: '🔑' },
-  ADMIN_CREATED: { label: 'Admin créé', color: 'text-emerald-400', icon: '👤' },
-  CONSULTANT_CREATED: { label: 'Consultant créé', color: 'text-cyan-400', icon: '👤' },
-  PERMISSIONS_UPDATED: { label: 'Permissions modifiées', color: 'text-orange-400', icon: '🔧' },
-  USER_DELETED: { label: 'Utilisateur supprimé', color: 'text-red-400', icon: '🗑️' },
-  COMPANY_CREATED: { label: 'Entreprise créée', color: 'text-cyan-400', icon: '🏗️' },
+const ACTION_LABELS: Record<string, { label: string; color: string; icon: string; category: string }> = {
+  LOGIN_SUCCESS: { label: 'Connexion', color: 'text-green-400', icon: '🔓', category: 'connexion' },
+  LOGIN_FAILED: { label: 'Échec connexion', color: 'text-red-400', icon: '🚫', category: 'connexion' },
+  COMPANY_ACCESS: { label: 'Accès entreprise', color: 'text-blue-400', icon: '🏢', category: 'connexion' },
+  FILE_UPLOAD: { label: 'Upload fichier', color: 'text-gold-400', icon: '📤', category: 'fichier' },
+  FILE_DELETE: { label: 'Suppression fichier', color: 'text-red-400', icon: '🗑️', category: 'fichier' },
+  FILE_PIN: { label: 'Épinglage', color: 'text-amber-400', icon: '📌', category: 'fichier' },
+  FILE_UNPIN: { label: 'Désépinglage', color: 'text-stone-400', icon: '📌', category: 'fichier' },
+  PIN_REGENERATED: { label: 'PIN modifié', color: 'text-purple-400', icon: '🔑', category: 'admin' },
+  ADMIN_CREATED: { label: 'Admin créé', color: 'text-emerald-400', icon: '👤', category: 'admin' },
+  CONSULTANT_CREATED: { label: 'Consultant créé', color: 'text-cyan-400', icon: '👤', category: 'admin' },
+  PERMISSIONS_UPDATED: { label: 'Permissions modifiées', color: 'text-orange-400', icon: '🔧', category: 'admin' },
+  USER_DELETED: { label: 'Utilisateur supprimé', color: 'text-red-400', icon: '🗑️', category: 'admin' },
+  COMPANY_CREATED: { label: 'Entreprise créée', color: 'text-cyan-400', icon: '🏗️', category: 'admin' },
+  FOLDER_CREATED: { label: 'Dossier créé', color: 'text-blue-300', icon: '📁', category: 'dossier' },
+  FOLDER_RENAMED: { label: 'Dossier renommé', color: 'text-blue-300', icon: '✏️', category: 'dossier' },
+  FOLDER_DELETED: { label: 'Dossier supprimé', color: 'text-red-300', icon: '🗂️', category: 'dossier' },
+  FOLDER_LOCKED: { label: 'Dossier verrouillé', color: 'text-amber-400', icon: '🔒', category: 'dossier' },
+  FOLDER_UNLOCKED: { label: 'Dossier déverrouillé', color: 'text-green-300', icon: '🔓', category: 'dossier' },
+  FILE_VIEW: { label: 'Fichier consulté', color: 'text-sky-400', icon: '👁️', category: 'consultation' },
+  FILE_DOWNLOAD: { label: 'Fichier téléchargé', color: 'text-sky-300', icon: '⬇️', category: 'consultation' },
 }
 
 const ROLE_COLORS: Record<string, string> = {
@@ -48,6 +55,7 @@ const PERM_LABELS: { key: keyof Permissions; label: string; group: string; desc:
   { key: 'canManageAdmins', label: 'Créer des comptes admin', group: '👥 Utilisateurs', desc: 'Peut créer et supprimer des comptes admin (superadmin seulement)' },
   { key: 'canManagePins', label: 'Gérer les PINs entreprise', group: '🔑 Accès', desc: 'Peut régénérer les PINs d\'accès des entreprises' },
   { key: 'canViewLogs', label: 'Voir les journaux d\'activité', group: '🔑 Accès', desc: 'Accès à l\'historique complet des actions' },
+  { key: 'canUnlockFolders', label: 'Déverrouiller des dossiers', group: '🔑 Accès', desc: 'Peut entrer le code PIN pour accéder aux dossiers confidentiels' },
 ]
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
@@ -64,6 +72,7 @@ function SidebarNav({ active, role, permissions, onTabChange }: {
     { id: 'companies', label: 'Entreprises', icon: <Building2 className="w-4 h-4" />, show: tabs.includes('companies') },
     { id: 'logs', label: 'Journaux', icon: <ScrollText className="w-4 h-4" />, show: tabs.includes('logs') },
     { id: 'pins', label: 'Gestion PINs', icon: <Key className="w-4 h-4" />, show: tabs.includes('pins') },
+    { id: 'folders', label: 'Gestion Dossiers', icon: <FolderLock className="w-4 h-4" />, show: tabs.includes('folders') || isSuperAdmin },
     { id: 'admins', label: 'Utilisateurs', icon: <Users className="w-4 h-4" />, show: tabs.includes('admins') || isAdmin },
     { id: 'connexions', label: 'Connexions', icon: <UserCheck className="w-4 h-4" />, show: isSuperAdmin },
   ].filter(i => i.always || i.show)
@@ -602,38 +611,121 @@ function PinManager() {
 }
 
 // ─── Logs ─────────────────────────────────────────────────────────────────────
+// ─── Catégories de logs ──────────────────────────────────────────────────────
+const LOG_CATEGORIES = [
+  { id: 'all', label: 'Tous', icon: '📋' },
+  { id: 'connexion', label: 'Connexions', icon: '🔓' },
+  { id: 'fichier', label: 'Fichiers', icon: '📁' },
+  { id: 'dossier', label: 'Dossiers', icon: '🗂️' },
+  { id: 'admin', label: 'Administration', icon: '⚙️' },
+  { id: 'consultation', label: 'Consultations', icon: '👁️' },
+] as const
+
 function LogsView() {
   const [logs, setLogs] = useState<ActivityLog[]>([])
   const [loading, setLoading] = useState(true)
+  const [category, setCategory] = useState<string>('all')
+  const [search, setSearch] = useState('')
+
   useEffect(() => {
-    fetch('/api/admin/logs?limit=200').then(r => r.json()).then(setLogs).finally(() => setLoading(false))
+    fetch('/api/admin/logs?limit=500').then(r => r.json()).then(setLogs).finally(() => setLoading(false))
   }, [])
+
+  const filtered = logs.filter(log => {
+    const meta = ACTION_LABELS[log.action]
+    if (category !== 'all' && meta?.category !== category) return false
+    if (search) {
+      const q = search.toLowerCase()
+      return (
+        log.userLabel?.toLowerCase().includes(q) ||
+        log.fileName?.toLowerCase().includes(q) ||
+        log.companyName?.toLowerCase().includes(q) ||
+        log.details?.toLowerCase().includes(q) ||
+        meta?.label?.toLowerCase().includes(q)
+      )
+    }
+    return true
+  })
+
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-gold-400 w-6 h-6" /></div>
+
   return (
-    <div className="space-y-2">
-      {logs.map(log => {
-        const meta = ACTION_LABELS[log.action] || { label: log.action, color: 'text-stone-400', icon: '📋' }
-        return (
-          <div key={log.id} className="flex items-start gap-4 glass rounded-xl px-4 py-3 border border-white/5">
-            <span className="text-lg flex-shrink-0 mt-0.5">{meta.icon}</span>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className={`text-sm font-medium ${meta.color}`}>{meta.label}</span>
-                {log.companyName && <span className="text-xs text-stone-500 bg-gov-700 px-2 py-0.5 rounded-full">{log.companyName}</span>}
-                {log.fileName && <span className="text-xs text-stone-600 truncate max-w-32">{log.fileName}</span>}
+    <div className="space-y-4">
+      {/* Barre de recherche */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-500" />
+        <input
+          value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Rechercher par utilisateur, fichier, dossier, entreprise..."
+          className="w-full pl-10 pr-4 py-2.5 bg-gov-800 border border-stone-700 rounded-xl text-sm text-white outline-none focus:border-stone-500"
+        />
+        {search && (
+          <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300">
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Filtres catégories */}
+      <div className="flex flex-wrap gap-2">
+        {LOG_CATEGORIES.map(cat => (
+          <button key={cat.id} onClick={() => setCategory(cat.id)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-all ${
+              category === cat.id
+                ? 'border-gold-500/40 bg-gold-500/10 text-gold-400'
+                : 'border-stone-700 text-stone-500 hover:border-stone-600 hover:text-stone-300'
+            }`}>
+            <span>{cat.icon}</span>{cat.label}
+            <span className="opacity-50 ml-0.5">
+              {cat.id === 'all' ? logs.length : logs.filter(l => ACTION_LABELS[l.action]?.category === cat.id).length}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Liste */}
+      <div className="space-y-1.5">
+        {filtered.map(log => {
+          const meta = ACTION_LABELS[log.action] || { label: log.action, color: 'text-stone-400', icon: '📋', category: 'other' }
+          const isConsultation = meta.category === 'consultation'
+          return (
+            <div key={log.id} className={`flex items-start gap-3 glass rounded-xl px-4 py-3 border transition-all ${
+              isConsultation ? 'border-sky-500/10 bg-sky-950/5' : 'border-white/5'
+            }`}>
+              <span className="text-base flex-shrink-0 mt-0.5">{meta.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-sm font-medium ${meta.color}`}>{meta.label}</span>
+                  <span className="text-xs text-stone-400 font-medium">{log.userLabel}</span>
+                  {log.companyName && <span className="text-xs text-stone-500 bg-gov-700 px-2 py-0.5 rounded-full">{log.companyName}</span>}
+                  {log.fileName && <span className="text-xs text-stone-400 bg-gov-700 px-2 py-0.5 rounded-full truncate max-w-40">📄 {log.fileName}</span>}
+                </div>
+                {log.details && <div className="text-xs text-stone-600 mt-0.5">{log.details}</div>}
+                {isConsultation && (
+                  <div className="text-xs text-sky-700 mt-0.5">
+                    {new Date(log.timestamp).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                    {' à '}
+                    {new Date(log.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-xs text-stone-600">{log.userLabel}</span>
-                {log.details && <span className="text-xs text-stone-700">{log.details}</span>}
+              <div className="text-xs text-stone-600 flex-shrink-0 text-right">
+                <div>{formatDistanceToNow(new Date(log.timestamp), { addSuffix: true, locale: fr })}</div>
+                {!isConsultation && (
+                  <div className="text-stone-700 mt-0.5">
+                    {new Date(log.timestamp).toLocaleDateString('fr-FR')}
+                  </div>
+                )}
               </div>
             </div>
-            <div className="text-xs text-stone-600 flex-shrink-0">
-              {formatDistanceToNow(new Date(log.timestamp), { addSuffix: true, locale: fr })}
-            </div>
+          )
+        })}
+        {filtered.length === 0 && (
+          <div className="text-center py-20 text-stone-600 text-sm">
+            {search ? `Aucun résultat pour "${search}"` : 'Aucun journal dans cette catégorie'}
           </div>
-        )
-      })}
-      {logs.length === 0 && <div className="text-center py-20 text-stone-600 text-sm">Aucun journal</div>}
+        )}
+      </div>
     </div>
   )
 }
@@ -661,6 +753,10 @@ function ConnexionsAdmins() {
   const loginLogs = logs.filter(l => l.action === 'LOGIN_SUCCESS' || l.action === 'LOGIN_FAILED')
   return (
     <div className="space-y-6">
+      <div className="glass rounded-xl px-4 py-3 border border-stone-700/40 text-xs text-stone-500 flex items-center gap-2">
+        <Lock className="w-3 h-3 text-stone-600" />
+        Les adresses IP sont hachées de façon irréversible — elles ne sont jamais stockées en clair.
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {Object.entries(stats).map(([name, data]) => (
           <div key={name} className="glass rounded-xl p-4 border border-white/5">
@@ -675,17 +771,219 @@ function ConnexionsAdmins() {
         ))}
       </div>
       <div className="space-y-2">
-        {loginLogs.slice(0, 50).map(log => (
+        {loginLogs.slice(0, 100).map(log => (
           <div key={log.id} className="flex items-center gap-4 glass rounded-xl px-4 py-3 border border-white/5">
             <span className="text-lg">{log.action === 'LOGIN_SUCCESS' ? '🔓' : '🚫'}</span>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <span className={`text-sm font-medium ${log.action === 'LOGIN_SUCCESS' ? 'text-green-400' : 'text-red-400'}`}>{log.userLabel}</span>
-              {log.ip && <span className="text-xs text-stone-600 ml-2 font-mono">{log.ip}</span>}
+              {log.ip && (
+                <span className="text-xs text-stone-700 ml-2 font-mono bg-gov-800 px-1.5 py-0.5 rounded" title="IP hachée (SHA-256 — non réversible)">
+                  #{log.ip}
+                </span>
+              )}
             </div>
-            <div className="text-xs text-stone-600">{formatDistanceToNow(new Date(log.timestamp), { addSuffix: true, locale: fr })}</div>
+            <div className="text-xs text-stone-600 text-right flex-shrink-0">
+              <div>{formatDistanceToNow(new Date(log.timestamp), { addSuffix: true, locale: fr })}</div>
+              <div className="text-stone-700">{new Date(log.timestamp).toLocaleDateString('fr-FR')}</div>
+            </div>
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+
+// ─── Gestion Dossiers (registre des verrous) ──────────────────────────────────
+function FolderManager() {
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [folders, setFolders] = useState<Record<string, { name: string; locked: boolean; companyName: string }[]>>({})
+  const [loading, setLoading] = useState(true)
+  const [lockingFolder, setLockingFolder] = useState<{ id: string; name: string; companyId: string } | null>(null)
+  const [pinInput, setPinInput] = useState('')
+  const [pinConfirm, setPinConfirm] = useState('')
+  const [unlockTarget, setUnlockTarget] = useState<{ id: string; name: string; companyId: string } | null>(null)
+  const [unlockPin, setUnlockPin] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    fetch('/api/companies/list').then(r => r.json()).then(async (comps: Company[]) => {
+      setCompanies(comps)
+      const all: Record<string, { name: string; locked: boolean; companyName: string }[]> = {}
+      await Promise.all(comps.map(async (c) => {
+        const res = await fetch(`/api/files/folders?companyId=${c.id}`)
+        const data = await res.json()
+        if (Array.isArray(data) && data.length > 0) {
+          all[c.id] = data.map((f: { name: string; lockPin?: string; id: string }) => ({
+            id: f.id, name: f.name, locked: !!f.lockPin, companyName: c.name, companyId: c.id,
+          }))
+        }
+      }))
+      setFolders(all)
+    }).finally(() => setLoading(false))
+  }, [])
+
+  async function lockFolder() {
+    if (!lockingFolder) return
+    if (!pinInput || pinInput !== pinConfirm) { setError('Les codes ne correspondent pas'); return }
+    if (!/^\d{4}$/.test(pinInput)) { setError('Le code doit être 4 chiffres'); return }
+    setSaving(true); setError('')
+    const res = await fetch('/api/files/folders/lock', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folderId: lockingFolder.id, pin: pinInput }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setError(data.error); setSaving(false); return }
+    setFolders(prev => {
+      const updated = { ...prev }
+      if (updated[lockingFolder.companyId]) {
+        updated[lockingFolder.companyId] = updated[lockingFolder.companyId].map((f: { id: string; locked: boolean }) =>
+          f.id === lockingFolder.id ? { ...f, locked: true } : f
+        )
+      }
+      return updated
+    })
+    setLockingFolder(null); setPinInput(''); setPinConfirm(''); setSaving(false)
+  }
+
+  async function unlockFolder() {
+    if (!unlockTarget || !unlockPin) return
+    setSaving(true); setError('')
+    const res = await fetch('/api/files/folders/lock', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folderId: unlockTarget.id, pin: unlockPin, unlock: true }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setError(data.error); setSaving(false); return }
+    setFolders(prev => {
+      const updated = { ...prev }
+      if (updated[unlockTarget.companyId]) {
+        updated[unlockTarget.companyId] = updated[unlockTarget.companyId].map((f: { id: string; locked: boolean }) =>
+          f.id === unlockTarget.id ? { ...f, locked: false } : f
+        )
+      }
+      return updated
+    })
+    setUnlockTarget(null); setUnlockPin(''); setSaving(false)
+  }
+
+  if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-gold-400 w-6 h-6" /></div>
+
+  const allFolders = Object.values(folders).flat() as { id: string; name: string; locked: boolean; companyName: string; companyId: string }[]
+
+  return (
+    <div className="space-y-6">
+      {/* Modal verrouillage */}
+      {lockingFolder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="glass rounded-2xl border border-white/10 w-full max-w-sm p-6 space-y-4">
+            <h2 className="text-white font-semibold font-serif flex items-center gap-2">
+              <FolderLock className="w-4 h-4 text-amber-400" />Verrouiller "{lockingFolder.name}"
+            </h2>
+            <p className="text-xs text-stone-500">Ce dossier ne sera accessible qu'avec le code à 4 chiffres.</p>
+            <div>
+              <label className="text-xs text-stone-400 mb-1 block">Code PIN (4 chiffres)</label>
+              <input type="password" inputMode="numeric" maxLength={4} value={pinInput}
+                onChange={e => { if (/^\d{0,4}$/.test(e.target.value)) setPinInput(e.target.value) }}
+                className="w-full bg-gov-800 border border-stone-700 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-amber-500 font-mono tracking-widest"
+                placeholder="••••" />
+            </div>
+            <div>
+              <label className="text-xs text-stone-400 mb-1 block">Confirmer le code</label>
+              <input type="password" inputMode="numeric" maxLength={4} value={pinConfirm}
+                onChange={e => { if (/^\d{0,4}$/.test(e.target.value)) setPinConfirm(e.target.value) }}
+                className="w-full bg-gov-800 border border-stone-700 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-amber-500 font-mono tracking-widest"
+                placeholder="••••" />
+            </div>
+            {error && <p className="text-red-400 text-sm">{error}</p>}
+            <div className="flex gap-3">
+              <button onClick={lockFolder} disabled={saving || pinInput.length !== 4}
+                className="flex-1 bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-40">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : '🔒 Verrouiller'}
+              </button>
+              <button onClick={() => { setLockingFolder(null); setPinInput(''); setPinConfirm(''); setError('') }}
+                className="flex-1 py-2 rounded-xl text-sm text-stone-400 border border-stone-700 hover:border-stone-600 transition-all">
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal déverrouillage */}
+      {unlockTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="glass rounded-2xl border border-white/10 w-full max-w-sm p-6 space-y-4">
+            <h2 className="text-white font-semibold font-serif flex items-center gap-2">
+              <Unlock className="w-4 h-4 text-green-400" />Déverrouiller "{unlockTarget.name}"
+            </h2>
+            <div>
+              <label className="text-xs text-stone-400 mb-1 block">Code PIN actuel</label>
+              <input type="password" inputMode="numeric" maxLength={4} value={unlockPin}
+                onChange={e => { if (/^\d{0,4}$/.test(e.target.value)) setUnlockPin(e.target.value) }}
+                className="w-full bg-gov-800 border border-stone-700 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-green-500 font-mono tracking-widest"
+                placeholder="••••" />
+            </div>
+            {error && <p className="text-red-400 text-sm">{error}</p>}
+            <div className="flex gap-3">
+              <button onClick={unlockFolder} disabled={saving || unlockPin.length !== 4}
+                className="flex-1 bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-40">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : '🔓 Déverrouiller'}
+              </button>
+              <button onClick={() => { setUnlockTarget(null); setUnlockPin(''); setError('') }}
+                className="flex-1 py-2 rounded-xl text-sm text-stone-400 border border-stone-700 hover:border-stone-600 transition-all">
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="glass rounded-xl p-4 border border-amber-600/10 text-sm text-stone-400">
+        🔒 <strong className="text-white">Registre des dossiers confidentiels.</strong> Seuls les admins peuvent verrouiller/déverrouiller. Les codes sont hachés — ils ne sont jamais affichés.
+      </div>
+
+      {allFolders.length === 0 ? (
+        <div className="text-center py-20 text-stone-600">
+          <Folder className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p className="text-sm">Aucun dossier custom créé pour l'instant</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {Object.entries(folders).map(([companyId, cFolders]) => (
+            <div key={companyId}>
+              <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">
+                {(cFolders[0] as { companyName?: string })?.companyName ?? companyId}
+              </h3>
+              <div className="space-y-1.5">
+                {(cFolders as { id: string; name: string; locked: boolean; companyName: string; companyId: string }[]).map(f => (
+                  <div key={f.id} className={`flex items-center gap-4 glass rounded-xl px-4 py-3 border ${f.locked ? 'border-amber-500/20 bg-amber-950/5' : 'border-white/5'}`}>
+                    <span className="text-lg">{f.locked ? '🔒' : '📁'}</span>
+                    <div className="flex-1">
+                      <span className="text-sm text-white font-medium">{f.name}</span>
+                      {f.locked && <span className="ml-2 text-xs text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">Confidentiel</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {f.locked ? (
+                        <button onClick={() => { setUnlockTarget({ id: f.id, name: f.name, companyId: f.companyId }); setError('') }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-all">
+                          <Unlock className="w-3 h-3" />Déverrouiller
+                        </button>
+                      ) : (
+                        <button onClick={() => { setLockingFolder({ id: f.id, name: f.name, companyId: f.companyId }); setError('') }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-all">
+                          <FolderLock className="w-3 h-3" />Verrouiller
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -812,6 +1110,7 @@ export default function DashboardPage() {
     companies: 'Entreprises',
     logs: "Journaux d'activité",
     pins: 'Gestion des PINs',
+    folders: 'Gestion Dossiers',
     admins: 'Utilisateurs',
     connexions: 'Connexions',
   }
@@ -832,6 +1131,7 @@ export default function DashboardPage() {
           {tab === 'companies' && <CompaniesList />}
           {tab === 'logs' && <LogsView />}
           {tab === 'pins' && <PinManager />}
+          {tab === 'folders' && <FolderManager />}
           {tab === 'admins' && <UserManager myRole={role} myUserId={userId} />}
           {tab === 'connexions' && role === 'superadmin' && <ConnexionsAdmins />}
         </main>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { verifyToken, COOKIE_NAME } from '@/lib/auth'
+import { readDb, addLog } from '@/lib/github-db'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -20,6 +21,25 @@ export async function GET(req: NextRequest) {
 
   const session = await verifyToken(token)
   if (!session) return NextResponse.json({ error: 'Session invalide' }, { status: 401 })
+
+  // Log FILE_VIEW — trouver les infos du fichier via son URL blob
+  try {
+    const { db } = await readDb()
+    const fileRecord = db.files.find(f => f.blobUrl === blobUrl)
+    if (fileRecord) {
+      const action = mode === 'inline' ? 'FILE_VIEW' : 'FILE_DOWNLOAD'
+      addLog({
+        userId: session.userId,
+        userLabel: session.role,
+        action,
+        companyId: fileRecord.companyId,
+        companyName: fileRecord.companySlug,
+        fileId: fileRecord.id,
+        fileName: fileRecord.name,
+        details: `Dossier : ${fileRecord.folder}`,
+      }).catch(() => {})
+    }
+  } catch { /* non-bloquant */ }
 
   try {
     // Pour un store privé, fetch avec le BLOB_READ_WRITE_TOKEN en Bearer
