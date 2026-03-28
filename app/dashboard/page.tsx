@@ -105,9 +105,9 @@ function SidebarNav({ active, role, permissions, onTabChange }: {
         ))}
       </nav>
       <div className="p-4 border-t border-white/5">
-        <Link href="/" className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-stone-400 hover:text-gold-400 hover:bg-gold-500/10 transition-all mb-1">
+        <a href="/" target="_blank" rel="noopener noreferrer" className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-stone-400 hover:text-gold-400 hover:bg-gold-500/10 transition-all mb-1">
           <span className="w-4 h-4">🌐</span>Retour au site
-        </Link>
+        </a>
         <button onClick={async () => { await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/' }}
           className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-stone-500 hover:text-red-400 hover:bg-red-950/20 transition-all">
           <LogOut className="w-4 h-4" />Déconnexion
@@ -1124,7 +1124,7 @@ export default function DashboardPage() {
             <h1 className="font-serif text-lg font-bold text-white">{TAB_TITLES[tab] || tab}</h1>
             <p className="text-xs text-stone-600">DEE — État de San Andreas</p>
           </div>
-          <Link href="/" className="text-xs text-stone-600 hover:text-stone-400 transition-colors">Voir le site public</Link>
+          <a href="/" target="_blank" rel="noopener noreferrer" className="text-xs text-stone-600 hover:text-stone-400 transition-colors">Voir le site public ↗</a>
         </header>
         <main className="flex-1 p-8 overflow-auto">
           {tab === 'dashboard' && <DashboardHome stats={stats} />}
