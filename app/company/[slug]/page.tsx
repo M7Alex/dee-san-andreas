@@ -139,7 +139,6 @@ function PinEntry({ companyName, slug, accentColor, onSuccess }: {
         </div>
       </div>
     </div>
-  </>
   )
 }
 
