@@ -96,7 +96,18 @@ export interface Company {
 
 export type CompanyCategory = 'gouvernement' | 'restauration' | 'evenementiel' | 'utilitaire' | 'production'
 
-export type FolderType = 'Financier' | 'RH' | 'Contrats' | 'Logistique' | 'Stratégie'
+export type FolderType = string
+
+export const DEFAULT_FOLDERS = ['Financier', 'RH', 'Contrats', 'Logistique', 'Stratégie'] as const
+
+export interface CustomFolder {
+  id: string
+  name: string
+  companyId: string
+  parentId?: string   // sous-dossier si défini
+  createdAt: string
+  createdBy: string
+}
 
 export interface FileRecord {
   id: string
@@ -104,7 +115,7 @@ export interface FileRecord {
   companySlug: string
   name: string
   originalName: string
-  folder: FolderType
+  folder: string
   mimeType: string
   size: number
   blobUrl: string
@@ -142,11 +153,15 @@ export type LogAction =
   | 'COMPANY_CREATED'
   | 'PERMISSIONS_UPDATED'
   | 'USER_DELETED'
+  | 'FOLDER_CREATED'
+  | 'FOLDER_RENAMED'
+  | 'FOLDER_DELETED'
 
 export interface DatabaseSchema {
   admins: AdminUser[]
   companies: Company[]
   files: FileRecord[]
+  folders: CustomFolder[]
   logs: ActivityLog[]
   meta: { version: string; lastUpdated: string }
 }

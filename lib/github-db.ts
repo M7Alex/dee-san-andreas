@@ -13,7 +13,7 @@ const DB_PATH = 'db/database.json'
 
 function emptyDb(): DatabaseSchema {
   return {
-    admins: [], companies: [], files: [], logs: [],
+    admins: [], companies: [], files: [], folders: [], logs: [],
     meta: { version: '1.0.0', lastUpdated: new Date().toISOString() },
   }
 }
@@ -56,6 +56,7 @@ export async function readDb(): Promise<{ db: DatabaseSchema; sha: string }> {
   let db: DatabaseSchema
   try {
     db = JSON.parse(content)
+    if (!db.folders) db.folders = [] // migration
   } catch {
     db = emptyDb()
   }

@@ -5,15 +5,19 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, Lock, Unlock, Upload, FileText,
-  Trash2, Pin, PinOff, Search, Folder, Download, ExternalLink,
-  AlertCircle, Loader2, X
+  Trash2, Pin, PinOff, Search, Folder, FolderPlus,
+  Download, ExternalLink, AlertCircle, Loader2, X,
+  Pencil, Check, ChevronRight, FolderOpen,
 } from 'lucide-react'
 import { COMPANIES } from '@/lib/companies-data'
-import { FileRecord, FolderType, Permissions, DEFAULT_PERMISSIONS } from '@/types'
+import { FileRecord, CustomFolder, DEFAULT_FOLDERS, Permissions, DEFAULT_PERMISSIONS } from '@/types'
 
-const FOLDERS: FolderType[] = ['Financier', 'RH', 'Contrats', 'Logistique', 'Stratégie']
-const FOLDER_ICONS: Record<FolderType, string> = {
+// ─── Dossiers par défaut (icônes) ─────────────────────────────────────────────
+const DEFAULT_FOLDER_ICONS: Record<string, string> = {
   Financier: '💰', RH: '👥', Contrats: '📋', Logistique: '🚚', 'Stratégie': '🎯',
+}
+function folderIcon(name: string) {
+  return DEFAULT_FOLDER_ICONS[name] ?? '📁'
 }
 
 function formatSize(b: number) {
@@ -21,11 +25,9 @@ function formatSize(b: number) {
   if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`
   return `${(b / 1048576).toFixed(1)} MB`
 }
-
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
 }
-
 function FileTypeIcon({ mimeType }: { mimeType: string }) {
   if (mimeType === 'application/pdf')
     return <span className="text-red-400 font-bold text-xs bg-red-400/10 px-1.5 py-0.5 rounded">PDF</span>
@@ -37,9 +39,6 @@ function FileTypeIcon({ mimeType }: { mimeType: string }) {
     return <span className="text-purple-400 font-bold text-xs bg-purple-400/10 px-1.5 py-0.5 rounded">IMG</span>
   return <FileText className="w-4 h-4 text-stone-400" />
 }
-
-// ─── Helpers pour les boutons ─────────────────────────────────────────────────
-// Pour un store PRIVÉ, on passe toujours par /api/files/download (proxy sécurisé)
 function getProxyUrl(blobUrl: string, mode: 'download' | 'inline') {
   return `/api/files/download?url=${encodeURIComponent(blobUrl)}&mode=${mode}`
 }
@@ -69,15 +68,11 @@ function PinEntry({ companyName, slug, accentColor, onSuccess }: {
     setLoading(true); setError('')
     try {
       const res = await fetch('/api/auth/company', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slug, pin }),
       })
       const data = await res.json()
-      if (!res.ok) {
-        if (res.status === 429) setBlocked(30)
-        throw new Error(data.error || 'PIN incorrect')
-      }
+      if (!res.ok) { if (res.status === 429) setBlocked(30); throw new Error(data.error || 'PIN incorrect') }
       onSuccess()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erreur')
@@ -92,7 +87,6 @@ function PinEntry({ companyName, slug, accentColor, onSuccess }: {
     if (val && i < 3) refs[i + 1].current?.focus()
     if (next.every(p => p)) submitPin(next.join(''))
   }
-
   function handleKeyDown(i: number, e: React.KeyboardEvent) {
     if (e.key === 'Backspace' && !pins[i] && i > 0) refs[i - 1].current?.focus()
   }
@@ -100,7 +94,8 @@ function PinEntry({ companyName, slug, accentColor, onSuccess }: {
   return (
     <div className="min-h-screen bg-gov-900 flex items-center justify-center px-4">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-3xl opacity-10" style={{ backgroundColor: accentColor }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-3xl opacity-10"
+          style={{ backgroundColor: accentColor }} />
       </div>
       <div className="relative w-full max-w-sm">
         <Link href="/" className="inline-flex items-center gap-2 text-stone-500 hover:text-stone-300 text-sm mb-8 transition-colors">
@@ -149,11 +144,8 @@ function PinEntry({ companyName, slug, accentColor, onSuccess }: {
 
 // ─── File Row ─────────────────────────────────────────────────────────────────
 function FileRow({ file, canDelete, canPin, onDelete, onPin }: {
-  file: FileRecord
-  canDelete: boolean
-  canPin: boolean
-  onDelete: (id: string) => void
-  onPin: (id: string, pinned: boolean) => void
+  file: FileRecord; canDelete: boolean; canPin: boolean
+  onDelete: (id: string) => void; onPin: (id: string, pinned: boolean) => void
 }) {
   const [deleting, setDeleting] = useState(false)
   const [pinning, setPinning] = useState(false)
@@ -162,39 +154,32 @@ function FileRow({ file, canDelete, canPin, onDelete, onPin }: {
     if (!confirm(`Supprimer "${file.name}" ?`)) return
     setDeleting(true)
     const res = await fetch('/api/files/delete', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fileId: file.id }),
     })
     if (res.ok) onDelete(file.id)
     setDeleting(false)
   }
-
   async function handlePin() {
     setPinning(true)
     await fetch('/api/files/pin', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fileId: file.id, pinned: !file.pinned }),
     })
     onPin(file.id, !file.pinned)
     setPinning(false)
   }
 
-  // URLs via le proxy sécurisé (store privé)
   const openUrl = getProxyUrl(file.blobUrl, 'inline')
   const downloadUrl = getProxyUrl(file.blobUrl, 'download')
 
   return (
     <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all group ${
-      file.pinned
-        ? 'bg-gold-900/10 border-gold-600/20'
-        : 'bg-gov-800/50 border-stone-800/50 hover:border-stone-700'
+      file.pinned ? 'bg-gold-900/10 border-gold-600/20' : 'bg-gov-800/50 border-stone-800/50 hover:border-stone-700'
     }`}>
       <div className="w-10 h-10 rounded-lg bg-gov-700 flex items-center justify-center flex-shrink-0">
         <FileTypeIcon mimeType={file.mimeType} />
       </div>
-
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           {file.pinned && <Pin className="w-3 h-3 text-gold-400 flex-shrink-0" />}
@@ -205,56 +190,28 @@ function FileRow({ file, canDelete, canPin, onDelete, onPin }: {
           <span>·</span>
           <span>{formatDate(file.uploadedAt)}</span>
           <span>·</span>
-          <span>{file.folder}</span>
+          <span className="flex items-center gap-1"><Folder className="w-3 h-3" />{file.folder}</span>
         </div>
       </div>
-
-      {/* Boutons — visibles au hover */}
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        {/* Ouvrir dans le navigateur (inline) */}
-        <a
-          href={openUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="p-2 rounded-lg text-stone-500 hover:text-gold-400 hover:bg-gov-700 transition-all"
-          title="Ouvrir"
-        >
+        <a href={openUrl} target="_blank" rel="noopener noreferrer"
+          className="p-2 rounded-lg text-stone-500 hover:text-gold-400 hover:bg-gov-700 transition-all" title="Ouvrir">
           <ExternalLink className="w-4 h-4" />
         </a>
-
-        {/* Télécharger (attachment) */}
-        <a
-          href={downloadUrl}
-          download={file.name}
-          className="p-2 rounded-lg text-stone-500 hover:text-blue-400 hover:bg-gov-700 transition-all"
-          title="Télécharger"
-        >
+        <a href={downloadUrl} download={file.name}
+          className="p-2 rounded-lg text-stone-500 hover:text-blue-400 hover:bg-gov-700 transition-all" title="Télécharger">
           <Download className="w-4 h-4" />
         </a>
-
-        {/* Épingler */}
         {canPin && (
-          <button
-            onClick={handlePin}
-            disabled={pinning}
+          <button onClick={handlePin} disabled={pinning}
             className="p-2 rounded-lg text-stone-500 hover:text-gold-400 hover:bg-gov-700 transition-all disabled:opacity-40"
-            title={file.pinned ? 'Désépingler' : 'Épingler'}
-          >
-            {pinning
-              ? <Loader2 className="w-4 h-4 animate-spin" />
-              : file.pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />
-            }
+            title={file.pinned ? 'Désépingler' : 'Épingler'}>
+            {pinning ? <Loader2 className="w-4 h-4 animate-spin" /> : file.pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
           </button>
         )}
-
-        {/* Supprimer */}
         {canDelete && (
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="p-2 rounded-lg text-stone-500 hover:text-red-400 hover:bg-red-950/30 transition-all disabled:opacity-40"
-            title="Supprimer"
-          >
+          <button onClick={handleDelete} disabled={deleting}
+            className="p-2 rounded-lg text-stone-500 hover:text-red-400 hover:bg-red-950/30 transition-all disabled:opacity-40" title="Supprimer">
             {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
           </button>
         )}
@@ -265,7 +222,7 @@ function FileRow({ file, canDelete, canPin, onDelete, onPin }: {
 
 // ─── Upload Zone ──────────────────────────────────────────────────────────────
 function UploadZone({ companyId, companySlug, folder, onUploaded }: {
-  companyId: string; companySlug: string; folder: FolderType; onUploaded: (f: FileRecord) => void
+  companyId: string; companySlug: string; folder: string; onUploaded: (f: FileRecord) => void
 }) {
   const [dragging, setDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -292,30 +249,19 @@ function UploadZone({ companyId, companySlug, folder, onUploaded }: {
     } finally { setUploading(false) }
   }
 
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault(); setDragging(false)
-    const file = e.dataTransfer.files[0]
-    if (file) uploadFile(file)
-  }
-
   return (
     <div>
       <div
         onDragOver={e => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
-        onDrop={handleDrop}
+        onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) uploadFile(f) }}
         onClick={() => !uploading && inputRef.current?.click()}
         className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
           dragging ? 'border-gold-500 bg-gold-900/10' : 'border-stone-700 hover:border-stone-600 hover:bg-gov-800/30'
         }`}
       >
-        <input
-          ref={inputRef}
-          type="file"
-          className="hidden"
-          accept=".pdf,.docx,.xlsx,.png,.jpeg,.jpg"
-          onChange={e => e.target.files?.[0] && uploadFile(e.target.files[0])}
-        />
+        <input ref={inputRef} type="file" className="hidden" accept=".pdf,.docx,.xlsx,.png,.jpeg,.jpg"
+          onChange={e => e.target.files?.[0] && uploadFile(e.target.files[0])} />
         {uploading ? (
           <div className="flex flex-col items-center gap-2">
             <Loader2 className="w-7 h-7 text-gold-400 animate-spin" />
@@ -338,43 +284,234 @@ function UploadZone({ companyId, companySlug, folder, onUploaded }: {
   )
 }
 
-// ─── Company Page principale ──────────────────────────────────────────────────
+// ─── Sidebar Dossiers ─────────────────────────────────────────────────────────
+function FolderSidebar({
+  companyId, files, activeFolder, accentColor, isStaff,
+  customFolders, onFolderChange, onFoldersUpdate,
+}: {
+  companyId: string
+  files: FileRecord[]
+  activeFolder: string
+  accentColor: string
+  isStaff: boolean
+  customFolders: CustomFolder[]
+  onFolderChange: (name: string) => void
+  onFoldersUpdate: (folders: CustomFolder[]) => void
+}) {
+  const [creating, setCreating] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [createError, setCreateError] = useState('')
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [hovered, setHovered] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const renameRef = useRef<HTMLInputElement>(null)
+
+  // Tous les dossiers : défauts + custom (sans sous-dossiers pour l'instant)
+  const defaultItems = DEFAULT_FOLDERS.map(name => ({ id: `default-${name}`, name, isDefault: true }))
+  const customItems = customFolders.filter(f => !f.parentId).map(f => ({ ...f, isDefault: false }))
+  const allFolders = [...defaultItems, ...customItems]
+
+  useEffect(() => { if (creating) setTimeout(() => inputRef.current?.focus(), 50) }, [creating])
+  useEffect(() => { if (renamingId) setTimeout(() => renameRef.current?.focus(), 50) }, [renamingId])
+
+  async function createFolder() {
+    if (!newName.trim()) return
+    setSaving(true); setCreateError('')
+    const res = await fetch('/api/files/folders', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName.trim(), companyId }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setCreateError(data.error); setSaving(false); return }
+    onFoldersUpdate([...customFolders, data.folder])
+    setNewName(''); setCreating(false); setSaving(false)
+    onFolderChange(data.folder.name)
+  }
+
+  async function renameFolder(folderId: string, oldName: string) {
+    if (!renameValue.trim() || renameValue.trim() === oldName) { setRenamingId(null); return }
+    const res = await fetch('/api/files/folders', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folderId, name: renameValue.trim() }),
+    })
+    if (res.ok) {
+      onFoldersUpdate(customFolders.map(f => f.id === folderId ? { ...f, name: renameValue.trim() } : f))
+      if (activeFolder === oldName) onFolderChange(renameValue.trim())
+    }
+    setRenamingId(null)
+  }
+
+  async function deleteFolder(folderId: string, name: string) {
+    if (!confirm(`Supprimer "${name}" ?\nLes fichiers seront déplacés vers "Général".`)) return
+    const res = await fetch('/api/files/folders', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folderId }),
+    })
+    if (res.ok) {
+      onFoldersUpdate(customFolders.filter(f => f.id !== folderId))
+      if (activeFolder === name) onFolderChange('all')
+    }
+  }
+
+  return (
+    <div className="glass rounded-2xl p-4 border border-white/5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Dossiers</h3>
+        {isStaff && (
+          <button
+            onClick={() => { setCreating(true); setCreateError('') }}
+            className="p-1 rounded-lg text-stone-600 hover:text-gold-400 hover:bg-gold-500/10 transition-all"
+            title="Nouveau dossier"
+          >
+            <FolderPlus className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      <div className="space-y-0.5">
+        {/* Tous les fichiers */}
+        <button
+          onClick={() => onFolderChange('all')}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-all"
+          style={activeFolder === 'all'
+            ? { backgroundColor: `${accentColor}20`, color: accentColor }
+            : { color: '#78716c' }}
+        >
+          <FolderOpen className="w-4 h-4 flex-shrink-0" />
+          <span className="flex-1 text-left">Tous les fichiers</span>
+          <span className="text-xs opacity-60">{files.length}</span>
+        </button>
+
+        {/* Dossiers */}
+        {allFolders.map(({ id, name, isDefault }) => {
+          const count = files.filter(f => f.folder === name).length
+          const isActive = activeFolder === name
+          const isRenaming = renamingId === id
+
+          return (
+            <div key={id} className="relative"
+              onMouseEnter={() => setHovered(id)}
+              onMouseLeave={() => setHovered(null)}>
+              {isRenaming ? (
+                <div className="flex items-center gap-1 px-2 py-1">
+                  <span className="text-sm">{folderIcon(name)}</span>
+                  <input
+                    ref={renameRef}
+                    value={renameValue}
+                    onChange={e => setRenameValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') renameFolder(id, name)
+                      if (e.key === 'Escape') setRenamingId(null)
+                    }}
+                    className="flex-1 bg-gov-700 border border-stone-600 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-stone-400 min-w-0"
+                  />
+                  <button onClick={() => renameFolder(id, name)} className="text-emerald-400 hover:text-emerald-300 p-0.5">
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => setRenamingId(null)} className="text-stone-500 hover:text-stone-300 p-0.5">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => onFolderChange(name)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-all"
+                  style={isActive
+                    ? { backgroundColor: `${accentColor}20`, color: accentColor }
+                    : { color: '#78716c' }}
+                >
+                  <span className="text-base flex-shrink-0">{folderIcon(name)}</span>
+                  <span className="flex-1 text-left truncate">{name}</span>
+                  <span className="text-xs opacity-60">{count}</span>
+
+                  {/* Actions renommer / supprimer — seulement custom, au hover */}
+                  {isStaff && !isDefault && hovered === id && (
+                    <span className="flex items-center gap-0.5 ml-1" onClick={e => e.stopPropagation()}>
+                      <span
+                        role="button"
+                        onClick={() => { setRenamingId(id); setRenameValue(name) }}
+                        className="p-1 rounded text-stone-500 hover:text-gold-400 hover:bg-gold-500/10 cursor-pointer transition-all"
+                        title="Renommer">
+                        <Pencil className="w-3 h-3" />
+                      </span>
+                      <span
+                        role="button"
+                        onClick={() => deleteFolder(id, name)}
+                        className="p-1 rounded text-stone-500 hover:text-red-400 hover:bg-red-500/10 cursor-pointer transition-all"
+                        title="Supprimer">
+                        <Trash2 className="w-3 h-3" />
+                      </span>
+                    </span>
+                  )}
+                </button>
+              )}
+            </div>
+          )
+        })}
+
+        {/* Formulaire nouveau dossier */}
+        {creating && (
+          <div className="flex items-center gap-1.5 px-2 py-1.5 mt-1 border border-stone-700 rounded-xl bg-gov-800/50">
+            <span className="text-sm">📁</span>
+            <input
+              ref={inputRef}
+              value={newName}
+              onChange={e => { setNewName(e.target.value); setCreateError('') }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') createFolder()
+                if (e.key === 'Escape') { setCreating(false); setNewName('') }
+              }}
+              placeholder="Nom du dossier"
+              maxLength={50}
+              className="flex-1 bg-transparent text-xs text-white outline-none placeholder:text-stone-600 min-w-0"
+            />
+            <button onClick={createFolder} disabled={saving || !newName.trim()}
+              className="text-emerald-400 hover:text-emerald-300 p-0.5 disabled:opacity-40">
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+            </button>
+            <button onClick={() => { setCreating(false); setNewName(''); setCreateError('') }}
+              className="text-stone-500 hover:text-stone-300 p-0.5">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+        {createError && <p className="text-red-400 text-xs px-2 pt-1">{createError}</p>}
+      </div>
+    </div>
+  )
+}
+
+// ─── Company Page ─────────────────────────────────────────────────────────────
 export default function CompanyPage() {
   const { slug } = useParams() as { slug: string }
   const company = COMPANIES.find(c => c.slug === slug)
 
   const [authenticated, setAuthenticated] = useState(false)
-  const [isStaff, setIsStaff] = useState(false) // admin, superadmin, consultant
+  const [isStaff, setIsStaff] = useState(false)
   const [permissions, setPermissions] = useState<Permissions | null>(null)
   const [files, setFiles] = useState<FileRecord[]>([])
+  const [customFolders, setCustomFolders] = useState<CustomFolder[]>([])
   const [loading, setLoading] = useState(false)
-  const [activeFolder, setActiveFolder] = useState<FolderType | 'all'>('all')
+  const [activeFolder, setActiveFolder] = useState('all')
   const [search, setSearch] = useState('')
   const [dbCompany, setDbCompany] = useState<{ id: string; name: string } | null>(null)
 
-  // Vérifier la session au montage
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then(r => r.json())
-      .then(d => {
-        if (!d.authenticated) return
-        const role = d.role ?? d.session?.role
-        const perms: Permissions = d.permissions ?? DEFAULT_PERMISSIONS[role] ?? DEFAULT_PERMISSIONS.consultant
-
-        if (role === 'superadmin' || role === 'admin' || role === 'consultant') {
-          // Bypass PIN — accès direct pour le staff
-          setIsStaff(true)
-          setAuthenticated(true)
-          setPermissions(perms)
-        } else if (role === 'company') {
-          const cs = d.companySlug ?? d.session?.companySlug
-          if (cs === slug) setAuthenticated(true)
-        }
-      })
-      .catch(() => {})
+    fetch('/api/auth/me').then(r => r.json()).then(d => {
+      if (!d.authenticated) return
+      const role = d.role ?? d.session?.role
+      const perms: Permissions = d.permissions ?? DEFAULT_PERMISSIONS[role] ?? DEFAULT_PERMISSIONS.consultant
+      if (role === 'superadmin' || role === 'admin' || role === 'consultant') {
+        setIsStaff(true); setAuthenticated(true); setPermissions(perms)
+      } else if (role === 'company') {
+        const cs = d.companySlug ?? d.session?.companySlug
+        if (cs === slug) setAuthenticated(true)
+      }
+    }).catch(() => {})
   }, [slug])
 
-  // Charger les fichiers une fois authentifié
   useEffect(() => {
     if (!authenticated) return
     setLoading(true)
@@ -382,13 +519,19 @@ export default function CompanyPage() {
       .then(r => r.json())
       .then(companies => {
         const c = companies.find((x: { slug: string; id: string }) => x.slug === slug)
-        if (c) {
-          setDbCompany({ id: c.id, name: c.name })
-          return fetch(`/api/files/list?companyId=${c.id}`)
-        }
+        if (!c) return null
+        setDbCompany({ id: c.id, name: c.name })
+        return Promise.all([
+          fetch(`/api/files/list?companyId=${c.id}`).then(r => r.json()),
+          fetch(`/api/files/folders?companyId=${c.id}`).then(r => r.json()),
+        ])
       })
-      .then(r => r?.json())
-      .then(data => { if (data && !data.error) setFiles(data) })
+      .then(results => {
+        if (!results) return
+        const [filesData, foldersData] = results
+        if (filesData && !filesData.error) setFiles(filesData)
+        if (Array.isArray(foldersData)) setCustomFolders(foldersData)
+      })
       .finally(() => setLoading(false))
   }, [authenticated, slug])
 
@@ -402,20 +545,14 @@ export default function CompanyPage() {
   )
 
   if (!authenticated) return (
-    <PinEntry
-      companyName={company.name}
-      slug={slug}
-      accentColor={company.accentColor}
-      onSuccess={() => setAuthenticated(true)}
-    />
+    <PinEntry companyName={company.name} slug={slug} accentColor={company.accentColor} onSuccess={() => setAuthenticated(true)} />
   )
 
-  // Permissions effectives
-  const canUpload = isStaff
-    ? (permissions?.canUploadFiles ?? true)
-    : true // les users entreprise peuvent uploader
+  const canUpload = isStaff ? (permissions?.canUploadFiles ?? true) : true
   const canDelete = isStaff && (permissions?.canDeleteFiles ?? true)
   const canPin = permissions?.canPinFiles ?? isStaff
+
+  const uploadFolder = activeFolder === 'all' ? DEFAULT_FOLDERS[0] : activeFolder
 
   const filtered = files.filter(f => {
     if (activeFolder !== 'all' && f.folder !== activeFolder) return false
@@ -427,13 +564,11 @@ export default function CompanyPage() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: company.color }}>
-      {/* Ambiance */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full blur-3xl opacity-8"
           style={{ backgroundColor: company.accentColor }} />
       </div>
 
-      {/* Header */}
       <header className="sticky top-0 z-50 glass border-b border-white/5">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -462,70 +597,44 @@ export default function CompanyPage() {
         </div>
       </header>
 
-      {/* Contenu */}
       <div className="max-w-6xl mx-auto px-6 py-8 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
-          {/* Sidebar dossiers + upload */}
           <aside className="lg:col-span-1 space-y-4">
-            <div className="glass rounded-2xl p-4 border border-white/5">
-              <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">Dossiers</h3>
-              <div className="space-y-1">
-                <button
-                  onClick={() => setActiveFolder('all')}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all"
-                  style={activeFolder === 'all'
-                    ? { backgroundColor: `${company.accentColor}20`, color: company.accentColor }
-                    : { color: '#78716c' }
-                  }
-                >
-                  <Folder className="w-4 h-4" />
-                  Tous les fichiers
-                  <span className="ml-auto text-xs opacity-60">{files.length}</span>
-                </button>
-                {FOLDERS.map(f => {
-                  const count = files.filter(file => file.folder === f).length
-                  return (
-                    <button key={f}
-                      onClick={() => setActiveFolder(f)}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all"
-                      style={activeFolder === f
-                        ? { backgroundColor: `${company.accentColor}20`, color: company.accentColor }
-                        : { color: '#78716c' }
-                      }
-                    >
-                      <span>{FOLDER_ICONS[f]}</span>
-                      {f}
-                      <span className="ml-auto text-xs opacity-60">{count}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+            <FolderSidebar
+              companyId={dbCompany?.id ?? ''}
+              files={files}
+              activeFolder={activeFolder}
+              accentColor={company.accentColor}
+              isStaff={isStaff}
+              customFolders={customFolders}
+              onFolderChange={setActiveFolder}
+              onFoldersUpdate={setCustomFolders}
+            />
 
             {canUpload && dbCompany && (
               <div className="glass rounded-2xl p-4 border border-white/5">
-                <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">
-                  Déposer dans : {activeFolder === 'all' ? 'Financier' : activeFolder}
-                </h3>
+                <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Déposer dans</h3>
+                <p className="text-xs text-stone-400 mb-3 flex items-center gap-1">
+                  <ChevronRight className="w-3 h-3" />
+                  <span className="font-medium" style={{ color: company.accentColor }}>{uploadFolder}</span>
+                </p>
                 <UploadZone
                   companyId={dbCompany.id}
                   companySlug={slug}
-                  folder={activeFolder === 'all' ? 'Financier' : activeFolder}
+                  folder={uploadFolder}
                   onUploaded={f => setFiles(prev => [f, ...prev])}
                 />
               </div>
             )}
           </aside>
 
-          {/* Liste des fichiers */}
           <main className="lg:col-span-3 space-y-4">
-            {/* Barre de recherche */}
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-500" />
               <input
                 type="text"
-                placeholder="Rechercher un fichier..."
+                placeholder={`Rechercher${activeFolder !== 'all' ? ` dans ${activeFolder}` : ''}...`}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="w-full pl-11 pr-4 py-3 rounded-xl bg-gov-800/80 border border-stone-700/50 focus:border-stone-600 text-white text-sm outline-none transition-all"
@@ -543,7 +652,6 @@ export default function CompanyPage() {
               </div>
             ) : (
               <>
-                {/* Épinglés */}
                 {pinned.length > 0 && (
                   <div className="space-y-2">
                     <h3 className="text-xs font-semibold text-gold-400 uppercase tracking-wider flex items-center gap-2">
@@ -557,8 +665,6 @@ export default function CompanyPage() {
                     ))}
                   </div>
                 )}
-
-                {/* Autres fichiers */}
                 {regular.length > 0 ? (
                   <div className="space-y-2">
                     {pinned.length > 0 && (
@@ -574,12 +680,8 @@ export default function CompanyPage() {
                 ) : filtered.length === 0 && (
                   <div className="text-center py-20 text-stone-600">
                     <Folder className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm">
-                      {search ? 'Aucun fichier trouvé' : 'Aucun fichier dans ce dossier'}
-                    </p>
-                    {canUpload && (
-                      <p className="text-xs mt-1 opacity-60">Déposez un fichier pour commencer</p>
-                    )}
+                    <p className="text-sm">{search ? 'Aucun fichier trouvé' : 'Aucun fichier dans ce dossier'}</p>
+                    {canUpload && <p className="text-xs mt-1 opacity-60">Déposez un fichier pour commencer</p>}
                   </div>
                 )}
               </>
