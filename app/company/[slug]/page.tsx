@@ -490,6 +490,7 @@ export default function CompanyPage() {
   const { slug } = useParams() as { slug: string }
   const company = COMPANIES.find(c => c.slug === slug)
 
+  // ── State ─────────────────────────────────────────────────────────────────
   const [authenticated, setAuthenticated] = useState(false)
   const [isStaff, setIsStaff] = useState(false)
   const [permissions, setPermissions] = useState<Permissions | null>(null)
@@ -502,6 +503,17 @@ export default function CompanyPage() {
   const [search, setSearch] = useState('')
   const [dbCompany, setDbCompany] = useState<{ id: string; name: string } | null>(null)
 
+  // ── PIN modal state (hooks must be at top level) ───────────────────────────
+  const [lockPinInput, setLockPinInput] = useState(['', '', '', ''])
+  const [lockPinError, setLockPinError] = useState('')
+  const [lockPinLoading, setLockPinLoading] = useState(false)
+  const lockPinRef0 = useRef<HTMLInputElement>(null)
+  const lockPinRef1 = useRef<HTMLInputElement>(null)
+  const lockPinRef2 = useRef<HTMLInputElement>(null)
+  const lockPinRef3 = useRef<HTMLInputElement>(null)
+  const lockPinRefs = [lockPinRef0, lockPinRef1, lockPinRef2, lockPinRef3]
+
+  // ── Effects ───────────────────────────────────────────────────────────────
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
       if (!d.authenticated) return
@@ -539,46 +551,7 @@ export default function CompanyPage() {
       .finally(() => setLoading(false))
   }, [authenticated, slug])
 
-  if (!company) return (
-    <div className="min-h-screen bg-gov-900 flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="font-serif text-2xl text-white mb-2">Entreprise introuvable</h1>
-        <Link href="/" className="text-gold-400 hover:underline text-sm">Retour à l'accueil</Link>
-      </div>
-    </div>
-  )
-
-  if (!authenticated) return (
-    <PinEntry companyName={company.name} slug={slug} accentColor={company.accentColor} onSuccess={() => setAuthenticated(true)} />
-  )
-
-  const canUpload = isStaff ? (permissions?.canUploadFiles ?? true) : true
-  const canDelete = isStaff && (permissions?.canDeleteFiles ?? true)
-  const canPin = permissions?.canPinFiles ?? isStaff
-
-  const uploadFolder = activeFolder === 'all' ? DEFAULT_FOLDERS[0] : activeFolder
-
-  const filtered = files.filter(f => {
-    if (activeFolder !== 'all' && f.folder !== activeFolder) return false
-    if (search && !f.name.toLowerCase().includes(search.toLowerCase())) return false
-    // Masquer les fichiers d'un dossier verrouillé si non déverrouillé
-    const folder = customFolders.find(cf => cf.name === f.folder)
-    if (folder?.lockPin && !unlockedFolders.has(folder.id)) return false
-    return true
-  })
-  const pinned = filtered.filter(f => f.pinned)
-  const regular = filtered.filter(f => !f.pinned)
-
-
-  // ─── Modal déverrouillage dossier ──────────────────────────────────────────
-  const [lockPinInput, setLockPinInput] = useState(['', '', '', ''])
-  const [lockPinError, setLockPinError] = useState('')
-  const [lockPinLoading, setLockPinLoading] = useState(false)
-  const lockPinRefs = [
-    useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null),
-  ]
-
+  // ── Folder PIN unlock ─────────────────────────────────────────────────────
   async function submitFolderPin(pin: string, folder: CustomFolder) {
     setLockPinLoading(true); setLockPinError('')
     const res = await fetch(`/api/files/folders/lock?folderId=${folder.id}&pin=${pin}`)
@@ -592,184 +565,228 @@ export default function CompanyPage() {
     }
     setUnlockedFolders(prev => new Set([...prev, folder.id]))
     setActiveFolder(folder.name)
-    setLockModal(null); setLockPinInput(['', '', '', '']); setLockPinLoading(false)
+    setLockModal(null)
+    setLockPinInput(['', '', '', ''])
+    setLockPinLoading(false)
   }
 
-  return (
-    <>
-    {lockModal && (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-        <div className="glass rounded-2xl border border-amber-500/20 w-full max-w-sm p-8">
-          <div className="text-center mb-6">
-            <div className="text-4xl mb-3">🔒</div>
-            <h2 className="text-white font-serif font-bold mb-1">Dossier confidentiel</h2>
-            <p className="text-stone-500 text-sm">"{lockModal.folder.name}" est protégé par un code.</p>
-          </div>
-          {lockPinError && (
-            <div className="flex items-center gap-2 bg-red-950/50 border border-red-800/40 rounded-xl px-4 py-3 mb-4 text-red-400 text-sm">
-              <span>{lockPinError}</span>
-            </div>
-          )}
-          <div className="flex gap-3 justify-center mb-6">
-            {lockPinInput.map((p, i) => (
-              <input key={i} ref={lockPinRefs[i]} type="text" inputMode="numeric" maxLength={1} value={p}
-                onChange={e => {
-                  if (!/^\d?$/.test(e.target.value)) return
-                  const next = [...lockPinInput]; next[i] = e.target.value; setLockPinInput(next)
-                  if (e.target.value && i < 3) lockPinRefs[i + 1].current?.focus()
-                  if (next.every(v => v)) submitFolderPin(next.join(''), lockModal.folder)
-                }}
-                onKeyDown={e => { if (e.key === 'Backspace' && !p && i > 0) lockPinRefs[i - 1].current?.focus() }}
-                className="w-12 h-14 text-center text-xl font-mono bg-gov-800 border-2 border-stone-700 rounded-xl text-white outline-none focus:border-amber-500"
-                autoFocus={i === 0} />
-            ))}
-          </div>
-          {lockPinLoading && <div className="flex justify-center mb-4"><Loader2 className="w-5 h-5 animate-spin text-amber-400" /></div>}
-          <button onClick={() => { setLockModal(null); setLockPinInput(['', '', '', '']); setLockPinError('') }}
-            className="w-full py-2 rounded-xl text-sm text-stone-500 hover:text-stone-300 transition-all">
-            Annuler
-          </button>
-        </div>
-      </div>
-    )}
-    <div className="min-h-screen" style={{ backgroundColor: company.color }}>
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full blur-3xl opacity-8"
-          style={{ backgroundColor: company.accentColor }} />
-      </div>
-
-      <header className="sticky top-0 z-50 glass border-b border-white/5">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            {isStaff ? (
-              <Link href="/dashboard" className="flex items-center gap-1.5 text-stone-500 hover:text-gold-400 text-sm transition-colors">
-                <ArrowLeft className="w-4 h-4" /> Dashboard
-              </Link>
-            ) : (
-              <Link href="/" className="text-stone-500 hover:text-stone-300 transition-colors">
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-            )}
-            <div className="w-px h-6 bg-stone-700" />
-            <div className="flex items-center gap-3">
-              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: company.accentColor }} />
-              <div>
-                <h1 className="font-serif text-white font-semibold">{company.name}</h1>
-                <p className="text-xs text-stone-500 capitalize">{company.category}</p>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5 text-xs text-stone-500">
-            <Unlock className="w-3 h-3" style={{ color: company.accentColor }} />
-            {isStaff ? 'Accès staff' : 'Accès entreprise'}
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-6xl mx-auto px-6 py-8 relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-
-          <aside className="lg:col-span-1 space-y-4">
-            <FolderSidebar
-              companyId={dbCompany?.id ?? ''}
-              files={files}
-              activeFolder={activeFolder}
-              accentColor={company.accentColor}
-              isStaff={isStaff}
-              customFolders={customFolders}
-              onFolderChange={(name) => {
-              const folder = customFolders.find(f => f.name === name)
-              if (folder?.lockPin && !unlockedFolders.has(folder.id) && !isStaff) {
-                setLockModal({ folder })
-                return
-              }
-              if (folder?.lockPin && !unlockedFolders.has(folder.id)) {
-                // staff with canUnlockFolders can also be blocked
-                setLockModal({ folder })
-                return
-              }
-              setActiveFolder(name)
-            }}
-              onFoldersUpdate={setCustomFolders}
-            />
-
-            {canUpload && dbCompany && (
-              <div className="glass rounded-2xl p-4 border border-white/5">
-                <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Déposer dans</h3>
-                <p className="text-xs text-stone-400 mb-3 flex items-center gap-1">
-                  <ChevronRight className="w-3 h-3" />
-                  <span className="font-medium" style={{ color: company.accentColor }}>{uploadFolder}</span>
-                </p>
-                <UploadZone
-                  companyId={dbCompany.id}
-                  companySlug={slug}
-                  folder={uploadFolder}
-                  onUploaded={f => setFiles(prev => [f, ...prev])}
-                />
-              </div>
-            )}
-          </aside>
-
-          <main className="lg:col-span-3 space-y-4">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-500" />
-              <input
-                type="text"
-                placeholder={`Rechercher${activeFolder !== 'all' ? ` dans ${activeFolder}` : ''}...`}
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 rounded-xl bg-gov-800/80 border border-stone-700/50 focus:border-stone-600 text-white text-sm outline-none transition-all"
-              />
-              {search && (
-                <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300">
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-
-            {loading ? (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 className="w-8 h-8 animate-spin" style={{ color: company.accentColor }} />
-              </div>
-            ) : (
-              <>
-                {pinned.length > 0 && (
-                  <div className="space-y-2">
-                    <h3 className="text-xs font-semibold text-gold-400 uppercase tracking-wider flex items-center gap-2">
-                      <Pin className="w-3 h-3" /> Épinglés
-                    </h3>
-                    {pinned.map(f => (
-                      <FileRow key={f.id} file={f} canDelete={canDelete} canPin={canPin}
-                        onDelete={id => setFiles(prev => prev.filter(x => x.id !== id))}
-                        onPin={(id, p) => setFiles(prev => prev.map(x => x.id === id ? { ...x, pinned: p } : x))}
-                      />
-                    ))}
-                  </div>
-                )}
-                {regular.length > 0 ? (
-                  <div className="space-y-2">
-                    {pinned.length > 0 && (
-                      <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Fichiers</h3>
-                    )}
-                    {regular.map(f => (
-                      <FileRow key={f.id} file={f} canDelete={canDelete} canPin={canPin}
-                        onDelete={id => setFiles(prev => prev.filter(x => x.id !== id))}
-                        onPin={(id, p) => setFiles(prev => prev.map(x => x.id === id ? { ...x, pinned: p } : x))}
-                      />
-                    ))}
-                  </div>
-                ) : filtered.length === 0 && (
-                  <div className="text-center py-20 text-stone-600">
-                    <Folder className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm">{search ? 'Aucun fichier trouvé' : 'Aucun fichier dans ce dossier'}</p>
-                    {canUpload && <p className="text-xs mt-1 opacity-60">Déposez un fichier pour commencer</p>}
-                  </div>
-                )}
-              </>
-            )}
-          </main>
-        </div>
+  // ── Early returns (after all hooks) ──────────────────────────────────────
+  if (!company) return (
+    <div className="min-h-screen bg-gov-900 flex items-center justify-center">
+      <div className="text-center">
+        <h1 className="font-serif text-2xl text-white mb-2">Entreprise introuvable</h1>
+        <Link href="/" className="text-gold-400 hover:underline text-sm">Retour à l'accueil</Link>
       </div>
     </div>
+  )
+
+  if (!authenticated) return (
+    <PinEntry companyName={company.name} slug={slug} accentColor={company.accentColor} onSuccess={() => setAuthenticated(true)} />
+  )
+
+  // ── Computed ──────────────────────────────────────────────────────────────
+  const canUpload = isStaff ? (permissions?.canUploadFiles ?? true) : true
+  const canDelete = isStaff && (permissions?.canDeleteFiles ?? true)
+  const canPin = permissions?.canPinFiles ?? isStaff
+  const uploadFolder = activeFolder === 'all' ? DEFAULT_FOLDERS[0] : activeFolder
+
+  const filtered = files.filter(f => {
+    if (activeFolder !== 'all' && f.folder !== activeFolder) return false
+    if (search && !f.name.toLowerCase().includes(search.toLowerCase())) return false
+    const cf = customFolders.find(cf => cf.name === f.folder)
+    if (cf?.lockPin && !unlockedFolders.has(cf.id)) return false
+    return true
+  })
+  const pinned = filtered.filter(f => f.pinned)
+  const regular = filtered.filter(f => !f.pinned)
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  return (
+    <>
+      {/* Modal déverrouillage dossier confidentiel */}
+      {lockModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="glass rounded-2xl border border-amber-500/20 w-full max-w-sm p-8">
+            <div className="text-center mb-6">
+              <div className="text-4xl mb-3">🔒</div>
+              <h2 className="text-white font-serif font-bold mb-1">Dossier confidentiel</h2>
+              <p className="text-stone-500 text-sm">"{lockModal.folder.name}" est protégé par un code.</p>
+            </div>
+            {lockPinError && (
+              <div className="flex items-center gap-2 bg-red-950/50 border border-red-800/40 rounded-xl px-4 py-3 mb-4 text-red-400 text-sm">
+                <span>{lockPinError}</span>
+              </div>
+            )}
+            <div className="flex gap-3 justify-center mb-6">
+              {lockPinInput.map((p, i) => (
+                <input
+                  key={i}
+                  ref={lockPinRefs[i]}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={p}
+                  onChange={e => {
+                    if (!/^\d?$/.test(e.target.value)) return
+                    const next = [...lockPinInput]; next[i] = e.target.value; setLockPinInput(next)
+                    if (e.target.value && i < 3) lockPinRefs[i + 1].current?.focus()
+                    if (next.every(v => v)) submitFolderPin(next.join(''), lockModal.folder)
+                  }}
+                  onKeyDown={e => { if (e.key === 'Backspace' && !p && i > 0) lockPinRefs[i - 1].current?.focus() }}
+                  className="w-12 h-14 text-center text-xl font-mono bg-gov-800 border-2 border-stone-700 rounded-xl text-white outline-none focus:border-amber-500"
+                  autoFocus={i === 0}
+                />
+              ))}
+            </div>
+            {lockPinLoading && (
+              <div className="flex justify-center mb-4">
+                <Loader2 className="w-5 h-5 animate-spin text-amber-400" />
+              </div>
+            )}
+            <button
+              onClick={() => { setLockModal(null); setLockPinInput(['', '', '', '']); setLockPinError('') }}
+              className="w-full py-2 rounded-xl text-sm text-stone-500 hover:text-stone-300 transition-all"
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="min-h-screen" style={{ backgroundColor: company.color }}>
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full blur-3xl opacity-8"
+            style={{ backgroundColor: company.accentColor }} />
+        </div>
+
+        <header className="sticky top-0 z-50 glass border-b border-white/5">
+          <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              {isStaff ? (
+                <Link href="/dashboard" className="flex items-center gap-1.5 text-stone-500 hover:text-gold-400 text-sm transition-colors">
+                  <ArrowLeft className="w-4 h-4" /> Dashboard
+                </Link>
+              ) : (
+                <Link href="/" className="text-stone-500 hover:text-stone-300 transition-colors">
+                  <ArrowLeft className="w-5 h-5" />
+                </Link>
+              )}
+              <div className="w-px h-6 bg-stone-700" />
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: company.accentColor }} />
+                <div>
+                  <h1 className="font-serif text-white font-semibold">{company.name}</h1>
+                  <p className="text-xs text-stone-500 capitalize">{company.category}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-stone-500">
+              <Unlock className="w-3 h-3" style={{ color: company.accentColor }} />
+              {isStaff ? 'Accès staff' : 'Accès entreprise'}
+            </div>
+          </div>
+        </header>
+
+        <div className="max-w-6xl mx-auto px-6 py-8 relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+            <aside className="lg:col-span-1 space-y-4">
+              <FolderSidebar
+                companyId={dbCompany?.id ?? ''}
+                files={files}
+                activeFolder={activeFolder}
+                accentColor={company.accentColor}
+                isStaff={isStaff}
+                customFolders={customFolders}
+                onFolderChange={(name) => {
+                  const folder = customFolders.find(f => f.name === name)
+                  if (folder?.lockPin && !unlockedFolders.has(folder.id)) {
+                    setLockModal({ folder })
+                    return
+                  }
+                  setActiveFolder(name)
+                }}
+                onFoldersUpdate={setCustomFolders}
+              />
+
+              {canUpload && dbCompany && (
+                <div className="glass rounded-2xl p-4 border border-white/5">
+                  <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Déposer dans</h3>
+                  <p className="text-xs text-stone-400 mb-3 flex items-center gap-1">
+                    <ChevronRight className="w-3 h-3" />
+                    <span className="font-medium" style={{ color: company.accentColor }}>{uploadFolder}</span>
+                  </p>
+                  <UploadZone
+                    companyId={dbCompany.id}
+                    companySlug={slug}
+                    folder={uploadFolder}
+                    onUploaded={f => setFiles(prev => [f, ...prev])}
+                  />
+                </div>
+              )}
+            </aside>
+
+            <main className="lg:col-span-3 space-y-4">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-500" />
+                <input
+                  type="text"
+                  placeholder={`Rechercher${activeFolder !== 'all' ? ` dans ${activeFolder}` : ''}...`}
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="w-full pl-11 pr-4 py-3 rounded-xl bg-gov-800/80 border border-stone-700/50 focus:border-stone-600 text-white text-sm outline-none transition-all"
+                />
+                {search && (
+                  <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300">
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {loading ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="w-8 h-8 animate-spin" style={{ color: company.accentColor }} />
+                </div>
+              ) : (
+                <>
+                  {pinned.length > 0 && (
+                    <div className="space-y-2">
+                      <h3 className="text-xs font-semibold text-gold-400 uppercase tracking-wider flex items-center gap-2">
+                        <Pin className="w-3 h-3" /> Épinglés
+                      </h3>
+                      {pinned.map(f => (
+                        <FileRow key={f.id} file={f} canDelete={canDelete} canPin={canPin}
+                          onDelete={id => setFiles(prev => prev.filter(x => x.id !== id))}
+                          onPin={(id, p) => setFiles(prev => prev.map(x => x.id === id ? { ...x, pinned: p } : x))}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {regular.length > 0 ? (
+                    <div className="space-y-2">
+                      {pinned.length > 0 && (
+                        <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Fichiers</h3>
+                      )}
+                      {regular.map(f => (
+                        <FileRow key={f.id} file={f} canDelete={canDelete} canPin={canPin}
+                          onDelete={id => setFiles(prev => prev.filter(x => x.id !== id))}
+                          onPin={(id, p) => setFiles(prev => prev.map(x => x.id === id ? { ...x, pinned: p } : x))}
+                        />
+                      ))}
+                    </div>
+                  ) : filtered.length === 0 && (
+                    <div className="text-center py-20 text-stone-600">
+                      <Folder className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                      <p className="text-sm">{search ? 'Aucun fichier trouvé' : 'Aucun fichier dans ce dossier'}</p>
+                      {canUpload && <p className="text-xs mt-1 opacity-60">Déposez un fichier pour commencer</p>}
+                    </div>
+                  )}
+                </>
+              )}
+            </main>
+          </div>
+        </div>
+      </div>
+    </>
   )
 }
