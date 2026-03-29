@@ -1239,7 +1239,7 @@ function CompanyCreator() {
                 <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: `${accentColor}20`, color: accentColor }}>Aperçu</span>
               </div>
               <div className="px-5 py-3 text-xs" style={{ color: `${accentColor}60` }}>
-                {description || 'Description de l'entreprise...'}
+                {description || "Description de l'entreprise..."}
               </div>
             </div>
 
@@ -1300,7 +1300,7 @@ function CompanyCreator() {
             </button>
             <button onClick={createCompany} disabled={saving || (!useCustom && selectedPreset === null)}
               className="flex-1 btn-gold py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : '🏢 Créer l'entreprise'}
+              {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "🏢 Créer l'entreprise"}
             </button>
           </div>
         </div>
