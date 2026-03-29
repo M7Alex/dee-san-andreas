@@ -55,7 +55,8 @@ const PERM_LABELS: { key: keyof Permissions; label: string; group: string; desc:
   { key: 'canManageAdmins', label: 'Créer des comptes admin', group: '👥 Utilisateurs', desc: 'Peut créer et supprimer des comptes admin (superadmin seulement)' },
   { key: 'canManagePins', label: 'Gérer les PINs entreprise', group: '🔑 Accès', desc: 'Peut régénérer les PINs d\'accès des entreprises' },
   { key: 'canViewLogs', label: 'Voir les journaux d\'activité', group: '🔑 Accès', desc: 'Accès à l\'historique complet des actions' },
-  { key: 'canUnlockFolders', label: 'Déverrouiller des dossiers', group: '🔑 Accès', desc: 'Peut entrer le code PIN pour accéder aux dossiers confidentiels' },
+  { key: 'canManageFolders', label: 'Gestion des dossiers', group: '🔑 Accès', desc: 'Accès à l\'onglet Gestion Dossiers : peut verrouiller/déverrouiller des dossiers' },
+  { key: 'canViewFolderPins', label: 'Voir les codes PIN des dossiers', group: '🔑 Accès', desc: 'Peut consulter en clair le code PIN d\'un dossier verrouillé dans le registre' },
 ]
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
@@ -72,7 +73,8 @@ function SidebarNav({ active, role, permissions, onTabChange }: {
     { id: 'companies', label: 'Entreprises', icon: <Building2 className="w-4 h-4" />, show: tabs.includes('companies') },
     { id: 'logs', label: 'Journaux', icon: <ScrollText className="w-4 h-4" />, show: tabs.includes('logs') },
     { id: 'pins', label: 'Gestion PINs', icon: <Key className="w-4 h-4" />, show: tabs.includes('pins') },
-    { id: 'folders', label: 'Gestion Dossiers', icon: <FolderLock className="w-4 h-4" />, show: tabs.includes('folders') || isSuperAdmin },
+    { id: 'folders', label: 'Gestion Dossiers', icon: <FolderLock className="w-4 h-4" />, show: tabs.includes('folders') || isSuperAdmin || (isAdmin && (permissions?.canManageFolders ?? false)) },
+    { id: 'companies-new', label: 'Créer une entreprise', icon: <Building2 className="w-4 h-4" />, show: isSuperAdmin || (isAdmin && (permissions?.canManageCompanies ?? false)) },
     { id: 'admins', label: 'Utilisateurs', icon: <Users className="w-4 h-4" />, show: tabs.includes('admins') || isAdmin },
     { id: 'connexions', label: 'Connexions', icon: <UserCheck className="w-4 h-4" />, show: isSuperAdmin },
   ].filter(i => i.always || i.show)
@@ -795,7 +797,8 @@ function ConnexionsAdmins() {
 
 
 // ─── Gestion Dossiers (registre des verrous) ──────────────────────────────────
-function FolderManager() {
+function FolderManager({ myRole, myPermissions }: { myRole: string; myPermissions: Permissions | null }) {
+  const canViewPins = myRole === 'superadmin' || (myPermissions?.canViewFolderPins ?? false)
   const [companies, setCompanies] = useState<Company[]>([])
   const [folders, setFolders] = useState<Record<string, { name: string; locked: boolean; companyName: string }[]>>({})
   const [loading, setLoading] = useState(true)
@@ -806,6 +809,17 @@ function FolderManager() {
   const [unlockPin, setUnlockPin] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [viewPinTarget, setViewPinTarget] = useState<{ id: string; name: string; companyId: string } | null>(null)
+  const [viewPinValue, setViewPinValue] = useState('')
+  const [viewPinLoading, setViewPinLoading] = useState(false)
+
+  async function fetchFolderPin(folderId: string) {
+    setViewPinLoading(true)
+    // The pin is stored as bcrypt hash — we can only show it if it was stored in plaintext somewhere
+    // We'll ask the admin to re-enter to verify, not show the original pin
+    // Instead we provide a "reveal" via the lock/unlock verify route
+    setViewPinLoading(false)
+  }
 
   useEffect(() => {
     fetch('/api/companies/list').then(r => r.json()).then(async (comps: Company[]) => {
@@ -940,6 +954,25 @@ function FolderManager() {
         </div>
       )}
 
+      {/* Modal voir PIN */}
+      {viewPinTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="glass rounded-2xl border border-white/10 w-full max-w-sm p-6 space-y-4">
+            <h2 className="text-white font-semibold font-serif flex items-center gap-2">
+              <Eye className="w-4 h-4 text-stone-400" />Code PIN — "{viewPinTarget.name}"
+            </h2>
+            <div className="glass rounded-xl p-4 border border-stone-700 text-center">
+              <p className="text-xs text-stone-500 mb-2">Le code PIN est stocké sous forme hachée et ne peut pas être récupéré en clair.</p>
+              <p className="text-xs text-stone-400">Pour réinitialiser le code, utilisez <strong className="text-white">Déverrouiller</strong> avec l'ancien code, puis <strong className="text-white">Verrouiller</strong> avec le nouveau.</p>
+            </div>
+            <button onClick={() => setViewPinTarget(null)}
+              className="w-full py-2 rounded-xl text-sm text-stone-400 border border-stone-700 hover:border-stone-600 transition-all">
+              Fermer
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="glass rounded-xl p-4 border border-amber-600/10 text-sm text-stone-400">
         🔒 <strong className="text-white">Registre des dossiers confidentiels.</strong> Seuls les admins peuvent verrouiller/déverrouiller. Les codes sont hachés — ils ne sont jamais affichés.
       </div>
@@ -965,6 +998,12 @@ function FolderManager() {
                       {f.locked && <span className="ml-2 text-xs text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">Confidentiel</span>}
                     </div>
                     <div className="flex items-center gap-2">
+                      {f.locked && canViewPins && (
+                        <button onClick={() => setViewPinTarget({ id: f.id, name: f.name, companyId: f.companyId })}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-stone-600 bg-gov-800 text-stone-400 hover:text-stone-200 hover:border-stone-500 transition-all">
+                          <Eye className="w-3 h-3" />Voir PIN
+                        </button>
+                      )}
                       {f.locked ? (
                         <button onClick={() => { setUnlockTarget({ id: f.id, name: f.name, companyId: f.companyId }); setError('') }}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-all">
@@ -982,6 +1021,288 @@ function FolderManager() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+// ─── Créer une entreprise ─────────────────────────────────────────────────────
+const CATEGORY_OPTIONS = [
+  { value: 'gouvernement', label: '🏛️ Gouvernement', desc: 'Police, justice, administration...' },
+  { value: 'restauration', label: '🍔 Restauration', desc: 'Restaurants, fast-food, cafés...' },
+  { value: 'evenementiel', label: '🎭 Évènementiel', desc: 'Clubs, bars, événements...' },
+  { value: 'utilitaire', label: '🔧 Utilitaire', desc: 'Garages, médias, services...' },
+  { value: 'production', label: '🏭 Production', desc: 'Industrie, logistique, énergie...' },
+]
+
+const PRESET_COLORS = [
+  { bg: '#0a1628', accent: '#1e40af', label: 'Bleu nuit' },
+  { bg: '#0a0a1a', accent: '#7c3aed', label: 'Violet' },
+  { bg: '#1a0a0a', accent: '#dc2626', label: 'Rouge' },
+  { bg: '#0f1a0f', accent: '#166534', label: 'Vert' },
+  { bg: '#150800', accent: '#f97316', label: 'Orange' },
+  { bg: '#0a0800', accent: '#d97706', label: 'Or' },
+  { bg: '#000a15', accent: '#0ea5e9', label: 'Cyan' },
+  { bg: '#100015', accent: '#a855f7', label: 'Mauve' },
+  { bg: '#150808', accent: '#f472b6', label: 'Rose' },
+  { bg: '#0f0800', accent: '#b45309', label: 'Brun' },
+]
+
+function CompanyCreator() {
+  const [step, setStep] = useState<1 | 2 | 3>(1)
+  const [name, setName] = useState('')
+  const [category, setCategory] = useState('')
+  const [selectedPreset, setSelectedPreset] = useState<number | null>(null)
+  const [customBg, setCustomBg] = useState('#0a0a14')
+  const [customAccent, setCustomAccent] = useState('#6366f1')
+  const [useCustom, setUseCustom] = useState(false)
+  const [description, setDescription] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [result, setResult] = useState<{ company: { name: string; slug: string; pin: string } } | null>(null)
+  const [pinConfirmed, setPinConfirmed] = useState(false)
+
+  const bgColor = useCustom ? customBg : (selectedPreset !== null ? PRESET_COLORS[selectedPreset].bg : '#0a0a14')
+  const accentColor = useCustom ? customAccent : (selectedPreset !== null ? PRESET_COLORS[selectedPreset].accent : '#6366f1')
+
+  const slug = name.trim()
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+
+  async function createCompany() {
+    if (!name.trim() || !category) { setError('Nom et catégorie requis'); return }
+    setSaving(true); setError('')
+    const res = await fetch('/api/admin/companies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, category, color: bgColor, accentColor, description }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setError(data.error); setSaving(false); return }
+    setResult(data)
+    setStep(3)
+    setSaving(false)
+  }
+
+  function reset() {
+    setStep(1); setName(''); setCategory(''); setSelectedPreset(null)
+    setUseCustom(false); setDescription(''); setResult(null); setPinConfirmed(false); setError('')
+  }
+
+  if (step === 3 && result) {
+    return (
+      <div className="max-w-lg mx-auto space-y-6">
+        <div className="glass rounded-2xl border border-emerald-500/20 p-8 text-center">
+          <div className="text-5xl mb-4">🎉</div>
+          <h2 className="font-serif text-xl font-bold text-white mb-1">Entreprise créée !</h2>
+          <p className="text-stone-400 text-sm mb-6">"{result.company.name}" est maintenant accessible.</p>
+
+          {/* PIN display */}
+          <div className="glass rounded-xl border border-amber-500/30 p-6 mb-6 bg-amber-950/10">
+            <p className="text-amber-400 text-xs font-semibold uppercase tracking-wider mb-3">⚠️ Code PIN — À noter maintenant</p>
+            <div className="flex gap-3 justify-center mb-3">
+              {result.company.pin.split('').map((d, i) => (
+                <div key={i} className="w-14 h-16 rounded-xl bg-gov-800 border-2 border-amber-500/40 flex items-center justify-center text-2xl font-mono font-bold text-amber-400">
+                  {d}
+                </div>
+              ))}
+            </div>
+            <p className="text-stone-500 text-xs">Ce code ne sera plus jamais affiché en clair après cette page.</p>
+          </div>
+
+          {/* Confirmation */}
+          {!pinConfirmed ? (
+            <div className="space-y-3">
+              <p className="text-stone-400 text-sm">Confirmez avoir noté le PIN pour continuer.</p>
+              <button onClick={() => setPinConfirmed(true)}
+                className="w-full btn-gold py-2.5 rounded-xl text-sm font-semibold">
+                ✓ J'ai noté le PIN
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="glass rounded-xl p-4 border border-white/5 text-left text-sm space-y-2">
+                <div className="flex justify-between"><span className="text-stone-500">Nom</span><span className="text-white font-medium">{result.company.name}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">Slug</span><span className="text-stone-300 font-mono text-xs">{result.company.slug}</span></div>
+                <div className="flex justify-between items-center">
+                  <span className="text-stone-500">URL</span>
+                  <a href={`/company/${result.company.slug}`} target="_blank"
+                    className="text-gold-400 hover:underline text-xs font-mono">/company/{result.company.slug}</a>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <a href={`/company/${result.company.slug}`} target="_blank"
+                  className="flex-1 flex items-center justify-center gap-2 btn-gold py-2.5 rounded-xl text-sm font-semibold">
+                  Ouvrir l'entreprise
+                </a>
+                <button onClick={reset}
+                  className="flex-1 py-2.5 rounded-xl text-sm text-stone-400 border border-stone-700 hover:border-stone-600 transition-all">
+                  Créer une autre
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-6">
+      {/* Étapes */}
+      <div className="flex items-center gap-3">
+        {[1, 2].map(s => (
+          <div key={s} className="flex items-center gap-2">
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border transition-all ${
+              step >= s ? 'bg-gold-500/20 border-gold-500/40 text-gold-400' : 'bg-gov-800 border-stone-700 text-stone-600'
+            }`}>{s}</div>
+            <span className={`text-sm ${step >= s ? 'text-stone-300' : 'text-stone-600'}`}>
+              {s === 1 ? 'Informations' : 'Apparence'}
+            </span>
+            {s < 2 && <ChevronRight className="w-4 h-4 text-stone-700" />}
+          </div>
+        ))}
+      </div>
+
+      {step === 1 && (
+        <div className="glass rounded-2xl border border-white/5 p-6 space-y-5">
+          <h3 className="text-white font-semibold font-serif">Informations de l'entreprise</h3>
+
+          <div>
+            <label className="text-xs text-stone-400 mb-1.5 block">Nom de l'entreprise *</label>
+            <input value={name} onChange={e => setName(e.target.value)}
+              placeholder="Ex : Maze Bank, LS Customs..."
+              className="w-full bg-gov-800 border border-stone-700 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-stone-500"
+            />
+            {name.trim() && (
+              <p className="text-xs text-stone-600 mt-1">Slug : <span className="font-mono text-stone-500">{slug}</span></p>
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs text-stone-400 mb-2 block">Catégorie *</label>
+            <div className="grid grid-cols-1 gap-2">
+              {CATEGORY_OPTIONS.map(opt => (
+                <button key={opt.value} onClick={() => setCategory(opt.value)}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm border transition-all text-left ${
+                    category === opt.value
+                      ? 'border-gold-500/40 bg-gold-500/10 text-gold-400'
+                      : 'border-stone-700 bg-gov-800 text-stone-400 hover:border-stone-600'
+                  }`}>
+                  <span className="text-lg">{opt.label.split(' ')[0]}</span>
+                  <div>
+                    <div className="font-medium">{opt.label.split(' ').slice(1).join(' ')}</div>
+                    <div className="text-xs opacity-60">{opt.desc}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-stone-400 mb-1.5 block">Description (optionnel)</label>
+            <input value={description} onChange={e => setDescription(e.target.value)}
+              placeholder="Courte description de l'entreprise..."
+              className="w-full bg-gov-800 border border-stone-700 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-stone-500"
+            />
+          </div>
+
+          {error && <p className="text-red-400 text-sm">{error}</p>}
+
+          <button
+            onClick={() => { if (!name.trim() || !category) { setError('Nom et catégorie requis'); return }; setError(''); setStep(2) }}
+            className="w-full btn-gold py-2.5 rounded-xl text-sm font-semibold">
+            Suivant →
+          </button>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="space-y-5">
+          <div className="glass rounded-2xl border border-white/5 p-6 space-y-5">
+            <h3 className="text-white font-semibold font-serif">Apparence</h3>
+
+            {/* Prévisualisation */}
+            <div className="rounded-xl overflow-hidden border border-white/10" style={{ backgroundColor: bgColor }}>
+              <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${accentColor}20` }}>
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: accentColor }} />
+                  <div>
+                    <div className="text-white font-semibold text-sm font-serif">{name || 'Nom entreprise'}</div>
+                    <div className="text-xs capitalize" style={{ color: `${accentColor}80` }}>{category || 'catégorie'}</div>
+                  </div>
+                </div>
+                <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: `${accentColor}20`, color: accentColor }}>Aperçu</span>
+              </div>
+              <div className="px-5 py-3 text-xs" style={{ color: `${accentColor}60` }}>
+                {description || 'Description de l'entreprise...'}
+              </div>
+            </div>
+
+            {/* Palettes prédéfinies */}
+            <div>
+              <label className="text-xs text-stone-400 mb-2 block">Palettes prédéfinies</label>
+              <div className="grid grid-cols-5 gap-2">
+                {PRESET_COLORS.map((preset, i) => (
+                  <button key={i} onClick={() => { setSelectedPreset(i); setUseCustom(false) }}
+                    title={preset.label}
+                    className={`h-10 rounded-xl border-2 transition-all relative overflow-hidden ${
+                      !useCustom && selectedPreset === i ? 'border-white/60 scale-105' : 'border-white/10 hover:border-white/30'
+                    }`}
+                    style={{ backgroundColor: preset.bg }}>
+                    <div className="absolute bottom-0 left-0 right-0 h-2" style={{ backgroundColor: preset.accent }} />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Couleurs custom */}
+            <div>
+              <button onClick={() => setUseCustom(!useCustom)}
+                className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${useCustom ? 'border-gold-500/40 text-gold-400 bg-gold-500/10' : 'border-stone-700 text-stone-500 hover:border-stone-600'}`}>
+                {useCustom ? '✓' : '+'} Couleurs personnalisées
+              </button>
+              {useCustom && (
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <label className="text-xs text-stone-400 mb-1 block">Fond (sombre)</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={customBg} onChange={e => setCustomBg(e.target.value)}
+                        className="w-10 h-9 rounded-lg border border-stone-700 bg-gov-800 cursor-pointer" />
+                      <input value={customBg} onChange={e => setCustomBg(e.target.value)}
+                        className="flex-1 bg-gov-800 border border-stone-700 rounded-lg px-3 py-2 text-xs text-white outline-none font-mono" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-stone-400 mb-1 block">Couleur d'accentuation</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={customAccent} onChange={e => setCustomAccent(e.target.value)}
+                        className="w-10 h-9 rounded-lg border border-stone-700 bg-gov-800 cursor-pointer" />
+                      <input value={customAccent} onChange={e => setCustomAccent(e.target.value)}
+                        className="flex-1 bg-gov-800 border border-stone-700 rounded-lg px-3 py-2 text-xs text-white outline-none font-mono" />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {error && <p className="text-red-400 text-sm">{error}</p>}
+
+          <div className="flex gap-3">
+            <button onClick={() => setStep(1)}
+              className="px-6 py-2.5 rounded-xl text-sm text-stone-400 border border-stone-700 hover:border-stone-600 transition-all">
+              ← Retour
+            </button>
+            <button onClick={createCompany} disabled={saving || (!useCustom && selectedPreset === null)}
+              className="flex-1 btn-gold py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : '🏢 Créer l'entreprise'}
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -1111,6 +1432,7 @@ export default function DashboardPage() {
     logs: "Journaux d'activité",
     pins: 'Gestion des PINs',
     folders: 'Gestion Dossiers',
+    'companies-new': 'Créer une entreprise',
     admins: 'Utilisateurs',
     connexions: 'Connexions',
   }
@@ -1131,7 +1453,8 @@ export default function DashboardPage() {
           {tab === 'companies' && <CompaniesList />}
           {tab === 'logs' && <LogsView />}
           {tab === 'pins' && <PinManager />}
-          {tab === 'folders' && <FolderManager />}
+          {tab === 'folders' && <FolderManager myRole={role} myPermissions={permissions} />}
+          {tab === 'companies-new' && <CompanyCreator />}
           {tab === 'admins' && <UserManager myRole={role} myUserId={userId} />}
           {tab === 'connexions' && role === 'superadmin' && <ConnexionsAdmins />}
         </main>

@@ -12,8 +12,9 @@ export interface Permissions {
   canManageConsultants: boolean
   canManagePins: boolean
   canViewLogs: boolean
-  canUnlockFolders: boolean
-  visibleTabs: Array<'dashboard' | 'companies' | 'logs' | 'pins' | 'admins' | 'folders'>
+  canManageFolders: boolean
+  canViewFolderPins: boolean
+  visibleTabs: Array<'dashboard' | 'companies' | 'logs' | 'pins' | 'admins' | 'folders' | 'companies-new'>
 }
 
 export const DEFAULT_PERMISSIONS: Record<UserRole, Permissions> = {
@@ -28,8 +29,9 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, Permissions> = {
     canManageConsultants: true,
     canManagePins: true,
     canViewLogs: true,
-    canUnlockFolders: true,
-    visibleTabs: ['dashboard', 'companies', 'logs', 'pins', 'admins', 'folders'],
+    canManageFolders: true,
+    canViewFolderPins: true,
+    visibleTabs: ['dashboard', 'companies', 'logs', 'pins', 'admins', 'folders', 'companies-new'],
   },
   admin: {
     canUploadFiles: true,
@@ -42,7 +44,8 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, Permissions> = {
     canManageConsultants: true,
     canManagePins: false,
     canViewLogs: true,
-    canUnlockFolders: true,
+    canManageFolders: true,
+    canViewFolderPins: false,
     visibleTabs: ['dashboard', 'companies', 'logs', 'admins'],
   },
   consultant: {
@@ -56,7 +59,8 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, Permissions> = {
     canManageConsultants: false,
     canManagePins: false,
     canViewLogs: false,
-    canUnlockFolders: false,
+    canManageFolders: false,
+    canViewFolderPins: false,
     visibleTabs: ['dashboard', 'companies'],
   },
   company: {
@@ -70,7 +74,8 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, Permissions> = {
     canManageConsultants: false,
     canManagePins: false,
     canViewLogs: false,
-    canUnlockFolders: false,
+    canManageFolders: false,
+    canViewFolderPins: false,
     visibleTabs: [],
   },
 }
@@ -167,6 +172,7 @@ export type LogAction =
   | 'FOLDER_UNLOCKED'
   | 'FILE_VIEW'
   | 'FILE_DOWNLOAD'
+  | 'COMPANY_DELETED'
 
 export interface DatabaseSchema {
   admins: AdminUser[]

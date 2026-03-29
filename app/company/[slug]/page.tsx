@@ -9,8 +9,7 @@ import {
   Download, ExternalLink, AlertCircle, Loader2, X,
   Pencil, Check, ChevronRight, FolderOpen,
 } from 'lucide-react'
-import { COMPANIES } from '@/lib/companies-data'
-import { FileRecord, CustomFolder, DEFAULT_FOLDERS, Permissions, DEFAULT_PERMISSIONS } from '@/types'
+import { FileRecord, CustomFolder, DEFAULT_FOLDERS, Permissions, DEFAULT_PERMISSIONS, CompanyCategory } from '@/types'
 
 // ─── Dossiers par défaut (icônes) ─────────────────────────────────────────────
 const DEFAULT_FOLDER_ICONS: Record<string, string> = {
@@ -487,9 +486,9 @@ function FolderSidebar({
 // ─── Company Page ─────────────────────────────────────────────────────────────
 export default function CompanyPage() {
   const { slug } = useParams() as { slug: string }
-  const company = COMPANIES.find(c => c.slug === slug)
 
   // ── State ─────────────────────────────────────────────────────────────────
+  const [company, setCompany] = useState<{ id: string; name: string; slug: string; category: CompanyCategory; color: string; accentColor: string; description?: string } | null>(null)
   const [authenticated, setAuthenticated] = useState(false)
   const [isStaff, setIsStaff] = useState(false)
   const [permissions, setPermissions] = useState<Permissions | null>(null)
@@ -533,9 +532,10 @@ export default function CompanyPage() {
     fetch('/api/companies/list')
       .then(r => r.json())
       .then(companies => {
-        const c = companies.find((x: { slug: string; id: string }) => x.slug === slug)
+        const c = companies.find((x: { slug: string; id: string; name: string; category: CompanyCategory; color: string; accentColor: string; description?: string }) => x.slug === slug)
         if (!c) return null
         setDbCompany({ id: c.id, name: c.name })
+        setCompany({ id: c.id, name: c.name, slug: c.slug, category: c.category as CompanyCategory, color: c.color, accentColor: c.accentColor, description: c.description })
         return Promise.all([
           fetch(`/api/files/list?companyId=${c.id}`).then(r => r.json()),
           fetch(`/api/files/folders?companyId=${c.id}`).then(r => r.json()),
