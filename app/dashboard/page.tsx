@@ -575,7 +575,7 @@ function PinManager() {
       <div className="space-y-2">
         {filtered.map(company => {
           const pin = revealedPins[company.id]
-          const accent = COMPANIES.find(c => c.slug === company.slug)?.accentColor || '#888'
+          const accent = (company as any).accentColor || (company as any).accentColor || COMPANIES.find(c => c.slug === company.slug)?.accentColor || '#888'
           return (
             <div key={company.id} className="glass rounded-xl p-4 border border-white/5 flex items-center gap-4">
               <div className="w-2 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: accent }} />
@@ -1239,7 +1239,7 @@ function CompanyCreator() {
                 <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: `${accentColor}20`, color: accentColor }}>Aperçu</span>
               </div>
               <div className="px-5 py-3 text-xs" style={{ color: `${accentColor}60` }}>
-                {description || 'Description de l'entreprise...'}
+                {description || "Description de l'entreprise..."}
               </div>
             </div>
 
@@ -1300,7 +1300,7 @@ function CompanyCreator() {
             </button>
             <button onClick={createCompany} disabled={saving || (!useCustom && selectedPreset === null)}
               className="flex-1 btn-gold py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : '🏢 Créer l'entreprise'}
+              {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "🏢 Créer l'entreprise"}
             </button>
           </div>
         </div>
@@ -1312,6 +1312,34 @@ function CompanyCreator() {
 // ─── Companies ────────────────────────────────────────────────────────────────
 function CompaniesList() {
   const [search, setSearch] = useState('')
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [loading, setLoading] = useState(true)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const [role, setRole] = useState('')
+
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => r.json()).then(d => setRole(d.role || ''))
+    fetch('/api/companies/list').then(r => r.json()).then(data => {
+      if (Array.isArray(data)) setCompanies(data)
+    }).finally(() => setLoading(false))
+  }, [])
+
+  async function deleteCompany(company: Company) {
+    if (!confirm(`Supprimer définitivement "${company.name}" ? Cette action est irréversible et supprime aussi tous les fichiers associés.`)) return
+    setDeleting(company.id)
+    const res = await fetch('/api/admin/companies', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyId: company.id }),
+    })
+    if (res.ok) {
+      setCompanies(prev => prev.filter(c => c.id !== company.id))
+    }
+    setDeleting(null)
+  }
+
+  if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-gold-400 w-6 h-6" /></div>
+
   return (
     <div className="space-y-6">
       <div className="relative">
@@ -1320,26 +1348,45 @@ function CompaniesList() {
           className="w-full pl-10 pr-4 py-2.5 bg-gov-800 border border-stone-700 rounded-xl text-sm text-white outline-none focus:border-stone-600" />
       </div>
       {Object.entries(CATEGORY_LABELS).map(([cat, label]) => {
-        const companies = COMPANIES.filter(c => c.category === cat && c.name.toLowerCase().includes(search.toLowerCase()))
-        if (!companies.length) return null
+        const filtered = companies.filter(c => c.category === cat && c.name.toLowerCase().includes(search.toLowerCase()))
+        if (!filtered.length) return null
         return (
           <div key={cat}>
             <h3 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3 flex items-center gap-2">
               <span>{CATEGORY_ICONS[cat]}</span>{label}
+              <span className="ml-1 text-stone-700">({filtered.length})</span>
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {companies.map(c => (
-                <Link key={c.slug} href={`/company/${c.slug}`}
-                  className="flex items-center gap-3 glass rounded-xl px-4 py-3 border border-white/5 hover:border-white/10 transition-all group">
-                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: c.accentColor }} />
-                  <span className="text-sm text-stone-300 group-hover:text-white transition-colors">{c.name}</span>
-                  <ChevronRight className="w-4 h-4 text-stone-700 ml-auto group-hover:text-stone-400 transition-colors" />
-                </Link>
+              {filtered.map(c => (
+                <div key={c.id} className="flex items-center gap-3 glass rounded-xl px-4 py-3 border border-white/5 hover:border-white/10 transition-all group">
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: (c as any).accentColor || '#888' }} />
+                  <Link href={`/company/${c.slug}`} className="text-sm text-stone-300 group-hover:text-white transition-colors flex-1 min-w-0 truncate">
+                    {c.name}
+                  </Link>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Link href={`/company/${c.slug}`} className="p-1.5 rounded-lg text-stone-500 hover:text-gold-400 hover:bg-gov-700 transition-all">
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </Link>
+                    {role === 'superadmin' && (
+                      <button onClick={() => deleteCompany(c)} disabled={deleting === c.id}
+                        className="p-1.5 rounded-lg text-stone-500 hover:text-red-400 hover:bg-red-950/30 transition-all disabled:opacity-40"
+                        title="Supprimer définitivement">
+                        {deleting === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                      </button>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           </div>
         )
       })}
+      {companies.length === 0 && !loading && (
+        <div className="text-center py-20 text-stone-600">
+          <Building2 className="w-12 h-12 mx-auto mb-3 opacity-20" />
+          <p className="text-sm">Aucune entreprise</p>
+        </div>
+      )}
     </div>
   )
 }

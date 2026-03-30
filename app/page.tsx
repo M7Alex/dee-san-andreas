@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { getCompaniesByCategory, CATEGORY_LABELS, CATEGORY_ICONS } from '@/lib/companies-data'
+import { CATEGORY_LABELS, CATEGORY_ICONS } from '@/lib/companies-data'
+import { Company } from '@/types'
 import { ChevronDown, ExternalLink, Shield, BarChart3, FileText, Users } from 'lucide-react'
 
 // ─── Holographic Eagle Animation ──────────────────────────────────────────────
@@ -580,9 +581,8 @@ function BackgroundParticles() {
 }
 
 // ─── Navigation Menu ──────────────────────────────────────────────────────────
-function NavMenu() {
+function NavMenu({ companiesByCategory }: { companiesByCategory: Record<string, Company[]> }) {
   const [open, setOpen] = useState<string | null>(null)
-  const groups = getCompaniesByCategory()
 
   return (
     <nav className="relative z-50">
@@ -602,7 +602,7 @@ function NavMenu() {
             {open === cat && (
               <div className="absolute top-full left-0 mt-1 w-56 glass rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-50 border border-gold-600/20">
                 <div className="p-1">
-                  {(groups[cat] || []).map((company) => (
+                  {(companiesByCategory[cat] || []).map((company) => (
                     <Link
                       key={company.slug}
                       href={`/company/${company.slug}`}
@@ -631,6 +631,7 @@ export default function LandingPage() {
   const [loading, setLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [dbCompanies, setDbCompanies] = useState<Company[]>([])
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
@@ -647,6 +648,11 @@ export default function LandingPage() {
     } else {
       setLoaded(true)
     }
+    // Charger les entreprises depuis la DB (inclut les créées dynamiquement)
+    fetch('/api/companies/list')
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setDbCompanies(data) })
+      .catch(() => {})
   }, [])
 
   const handleLoadDone = () => {
@@ -784,7 +790,7 @@ export default function LandingPage() {
         {/* ── Navigation ── */}
         <section className="sticky top-16 z-40 glass border-y border-gold-600/10 py-3">
           <div className="max-w-7xl mx-auto px-6">
-            <NavMenu />
+            <NavMenu companiesByCategory={Object.fromEntries(Object.entries(CATEGORY_LABELS).map(([cat]) => [cat, dbCompanies.filter(c => c.category === cat)]))} />
           </div>
         </section>
 
@@ -792,8 +798,7 @@ export default function LandingPage() {
         <section id="entreprises" className="py-24 px-6 relative z-10">
           <div className="max-w-7xl mx-auto">
             {Object.entries(CATEGORY_LABELS).map(([cat, label]) => {
-              const groups = getCompaniesByCategory()
-              const companies = groups[cat] || []
+              const companies = dbCompanies.filter(c => c.category === cat)
               return (
                 <div key={cat} className="mb-16">
                   <div className="flex items-center gap-4 mb-8">
