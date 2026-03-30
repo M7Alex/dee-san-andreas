@@ -489,6 +489,7 @@ export default function CompanyPage() {
 
   // ── State ─────────────────────────────────────────────────────────────────
   const [company, setCompany] = useState<{ id: string; name: string; slug: string; category: CompanyCategory; color: string; accentColor: string; description?: string } | null>(null)
+  const [companyLoading, setCompanyLoading] = useState(true) // charge l'entreprise dès le montage
   const [authenticated, setAuthenticated] = useState(false)
   const [isStaff, setIsStaff] = useState(false)
   const [permissions, setPermissions] = useState<Permissions | null>(null)
@@ -512,6 +513,23 @@ export default function CompanyPage() {
   const lockPinRefs = [lockPinRef0, lockPinRef1, lockPinRef2, lockPinRef3]
 
   // ── Effects ───────────────────────────────────────────────────────────────
+  // Charger l'entreprise IMMÉDIATEMENT (visiteurs inclus — avant toute auth)
+  useEffect(() => {
+    setCompanyLoading(true)
+    fetch('/api/companies/list')
+      .then(r => r.json())
+      .then((companies: Array<{ id: string; name: string; slug: string; category: CompanyCategory; color: string; accentColor: string; description?: string }>) => {
+        const c = companies.find(x => x.slug === slug)
+        if (c) {
+          setCompany({ id: c.id, name: c.name, slug: c.slug, category: c.category, color: c.color, accentColor: c.accentColor, description: c.description })
+          setDbCompany({ id: c.id, name: c.name })
+        }
+      })
+      .catch(() => {})
+      .finally(() => setCompanyLoading(false))
+  }, [slug])
+
+  // Vérifier la session (staff bypass PIN)
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => {
       if (!d.authenticated) return
@@ -526,29 +544,20 @@ export default function CompanyPage() {
     }).catch(() => {})
   }, [slug])
 
+  // Charger fichiers & dossiers une fois authentifié + entreprise connue
   useEffect(() => {
-    if (!authenticated) return
+    if (!authenticated || !dbCompany) return
     setLoading(true)
-    fetch('/api/companies/list')
-      .then(r => r.json())
-      .then(companies => {
-        const c = companies.find((x: { slug: string; id: string; name: string; category: CompanyCategory; color: string; accentColor: string; description?: string }) => x.slug === slug)
-        if (!c) return null
-        setDbCompany({ id: c.id, name: c.name })
-        setCompany({ id: c.id, name: c.name, slug: c.slug, category: c.category as CompanyCategory, color: c.color, accentColor: c.accentColor, description: c.description })
-        return Promise.all([
-          fetch(`/api/files/list?companyId=${c.id}`).then(r => r.json()),
-          fetch(`/api/files/folders?companyId=${c.id}`).then(r => r.json()),
-        ])
-      })
-      .then(results => {
-        if (!results) return
-        const [filesData, foldersData] = results
+    Promise.all([
+      fetch(`/api/files/list?companyId=${dbCompany.id}`).then(r => r.json()),
+      fetch(`/api/files/folders?companyId=${dbCompany.id}`).then(r => r.json()),
+    ])
+      .then(([filesData, foldersData]) => {
         if (filesData && !filesData.error) setFiles(filesData)
         if (Array.isArray(foldersData)) setCustomFolders(foldersData)
       })
       .finally(() => setLoading(false))
-  }, [authenticated, slug])
+  }, [authenticated, dbCompany?.id])
 
   // ── Folder PIN unlock ─────────────────────────────────────────────────────
   async function submitFolderPin(pin: string, folder: CustomFolder) {
@@ -570,10 +579,19 @@ export default function CompanyPage() {
   }
 
   // ── Early returns (after all hooks) ──────────────────────────────────────
+  // Pendant le chargement initial → spinner (évite le "introuvable" prématuré)
+  if (companyLoading) return (
+    <div className="min-h-screen bg-gov-900 flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-gold-600/30 border-t-gold-400 rounded-full animate-spin" />
+    </div>
+  )
+
+  // Chargement terminé et entreprise introuvable en DB
   if (!company) return (
     <div className="min-h-screen bg-gov-900 flex items-center justify-center">
       <div className="text-center">
         <h1 className="font-serif text-2xl text-white mb-2">Entreprise introuvable</h1>
+        <p className="text-stone-500 text-sm mb-4">Cette entreprise n'existe pas ou a été supprimée.</p>
         <Link href="/" className="text-gold-400 hover:underline text-sm">Retour à l'accueil</Link>
       </div>
     </div>
