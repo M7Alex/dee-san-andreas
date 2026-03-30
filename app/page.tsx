@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { CATEGORY_LABELS, CATEGORY_ICONS } from '@/lib/companies-data'
 import { Company } from '@/types'
@@ -600,7 +600,7 @@ function NavMenu({ companiesByCategory }: { companiesByCategory: Record<string, 
               <ChevronDown className="w-3 h-3 opacity-60" />
             </button>
             {open === cat && (
-              <div className="absolute top-full left-0 mt-1 w-56 glass rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-50 border border-gold-600/20">
+              <div className="nav-dropdown absolute top-full left-0 mt-1 w-56 glass rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-50 border border-gold-600/20">
                 <div className="p-1">
                   {(companiesByCategory[cat] || []).map((company) => (
                     <Link
@@ -622,6 +622,224 @@ function NavMenu({ companiesByCategory }: { companiesByCategory: Record<string, 
         ))}
       </div>
     </nav>
+  )
+}
+
+// ─── Stagger Grid for company cards ──────────────────────────────────────────
+function StaggerGrid({ companies }: { companies: Company[] }) {
+  const [visible, setVisible] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setVisible(true) },
+      { threshold: 0.1 }
+    )
+    if (ref.current) observer.observe(ref.current)
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <div ref={ref} className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+      {companies.map((company, i) => (
+        <div
+          key={company.slug}
+          style={{
+            opacity: visible ? 1 : 0,
+            transform: visible ? 'translateY(0)' : 'translateY(20px)',
+            transition: `opacity 0.5s ease ${i * 40}ms, transform 0.5s ease ${i * 40}ms`,
+          }}
+        >
+          <CompanyCard company={company} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Animated Stat Card ──────────────────────────────────────────────────────
+function AnimatedStatCard({ icon, value, suffix, label, delay }: {
+  icon: React.ReactNode; value: number; suffix: string; label: string; delay: number
+}) {
+  const [count, setCount] = useState(0)
+  const [visible, setVisible] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setVisible(true) },
+      { threshold: 0.5 }
+    )
+    if (ref.current) observer.observe(ref.current)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    if (!visible) return
+    const timer = setTimeout(() => {
+      let start = 0
+      const duration = 1200
+      const step = 16
+      const increment = value / (duration / step)
+      const interval = setInterval(() => {
+        start += increment
+        if (start >= value) { setCount(value); clearInterval(interval) }
+        else setCount(Math.floor(start))
+      }, step)
+      return () => clearInterval(interval)
+    }, delay)
+    return () => clearTimeout(timer)
+  }, [visible, value, delay])
+
+  return (
+    <div
+      ref={ref}
+      className="glass glass-scan rounded-xl p-4 text-center relative overflow-hidden group"
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'translateY(0)' : 'translateY(16px)',
+        transition: `opacity 0.6s ease ${delay}ms, transform 0.6s ease ${delay}ms`,
+      }}
+    >
+      <div className="absolute inset-0 bg-gradient-to-b from-gold-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      <div className="text-gold-400 flex justify-center mb-2 relative z-10">{icon}</div>
+      <div className="font-serif text-2xl font-bold text-white relative z-10">
+        {count}{suffix}
+      </div>
+      <div className="text-xs text-stone-500 mt-1 relative z-10">{label}</div>
+    </div>
+  )
+}
+
+// ─── Category Header with scroll reveal ──────────────────────────────────────
+function CategoryHeader({ label, icon, count }: { label: string; icon: string; count: number }) {
+  const [visible, setVisible] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setVisible(true) },
+      { threshold: 0.2 }
+    )
+    if (ref.current) observer.observe(ref.current)
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <div
+      ref={ref}
+      className="flex items-center gap-4 mb-8"
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'translateX(0)' : 'translateX(-20px)',
+        transition: 'opacity 0.7s ease, transform 0.7s ease',
+      }}
+    >
+      <span className="text-3xl">{icon}</span>
+      <div>
+        <h2 className="font-serif text-2xl font-bold text-white">{label}</h2>
+        <p className="text-stone-500 text-sm">{count} entités</p>
+      </div>
+      <div className="flex-1 h-px cat-divider ml-4" />
+    </div>
+  )
+}
+
+// ─── Company Card with 3D tilt + glow ────────────────────────────────────────
+function CompanyCard({ company }: { company: Company }) {
+  const cardRef = useRef<HTMLAnchorElement>(null)
+  const [tilt, setTilt] = useState({ x: 0, y: 0 })
+  const [hovered, setHovered] = useState(false)
+  const [glowPos, setGlowPos] = useState({ x: 50, y: 50 })
+
+  function handleMouseMove(e: React.MouseEvent<HTMLAnchorElement>) {
+    const card = cardRef.current
+    if (!card) return
+    const rect = card.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const cx = rect.width / 2
+    const cy = rect.height / 2
+    const tiltX = ((y - cy) / cy) * -10
+    const tiltY = ((x - cx) / cx) * 10
+    setTilt({ x: tiltX, y: tiltY })
+    setGlowPos({ x: (x / rect.width) * 100, y: (y / rect.height) * 100 })
+  }
+
+  function handleMouseLeave() {
+    setHovered(false)
+    setTilt({ x: 0, y: 0 })
+    setGlowPos({ x: 50, y: 50 })
+  }
+
+  return (
+    <a
+      ref={cardRef}
+      href={`/company/${company.slug}`}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={handleMouseLeave}
+      className="block relative rounded-xl overflow-hidden card-noise"
+      style={{
+        background: company.color,
+        transform: hovered
+          ? `perspective(600px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale(1.04)`
+          : 'perspective(600px) rotateX(0deg) rotateY(0deg) scale(1)',
+        transition: hovered ? 'transform 0.08s ease-out' : 'transform 0.45s cubic-bezier(0.23, 1, 0.32, 1)',
+        boxShadow: hovered
+          ? `0 12px 40px ${company.accentColor}30, 0 0 0 1px ${company.accentColor}40`
+          : '0 2px 12px rgba(0,0,0,0.4)',
+        willChange: 'transform',
+      }}
+    >
+      {/* Glow radial qui suit la souris */}
+      <div
+        className="absolute inset-0 pointer-events-none transition-opacity duration-300"
+        style={{
+          opacity: hovered ? 1 : 0,
+          background: `radial-gradient(circle at ${glowPos.x}% ${glowPos.y}%, ${company.accentColor}25 0%, transparent 65%)`,
+        }}
+      />
+      {/* Shimmer en haut */}
+      <div
+        className="absolute top-0 left-0 right-0 h-px transition-opacity duration-300"
+        style={{
+          opacity: hovered ? 1 : 0,
+          background: `linear-gradient(90deg, transparent, ${company.accentColor}80, transparent)`,
+        }}
+      />
+      <div className="p-4 relative z-10">
+        {/* Dot avec pulse au hover */}
+        <div className="relative mb-3 w-fit">
+          <div
+            className="w-2 h-2 rounded-full"
+            style={{ backgroundColor: company.accentColor }}
+          />
+          {hovered && (
+            <div
+              className="absolute inset-0 rounded-full animate-ping"
+              style={{ backgroundColor: company.accentColor, opacity: 0.4 }}
+            />
+          )}
+        </div>
+        <div
+          className="font-medium text-sm leading-tight transition-colors duration-200"
+          style={{ color: hovered ? '#ffffff' : '#d6d3d1' }}
+        >
+          {company.name}
+        </div>
+        {company.description && (
+          <div className="text-xs text-stone-500 mt-1 leading-tight line-clamp-2 transition-colors duration-200"
+            style={{ color: hovered ? 'rgba(214,211,209,0.6)' : undefined }}>
+            {company.description}
+          </div>
+        )}
+        <ExternalLink
+          className="w-3 h-3 mt-2 transition-all duration-200"
+          style={{ color: hovered ? company.accentColor : '#57534e' }}
+        />
+      </div>
+    </a>
   )
 }
 
@@ -712,7 +930,7 @@ export default function LandingPage() {
             style={{ opacity: loaded ? 1 : 0, transform: loaded ? 'translateY(0)' : 'translateY(24px)', transition: 'all 1s ease' }}
           >
             {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-gold-600/30 bg-gold-900/10 text-gold-400 text-xs font-medium tracking-widest uppercase mb-8">
+            <div className="badge-float inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-gold-600/30 bg-gold-900/10 text-gold-400 text-xs font-medium tracking-widest uppercase mb-8">
               <span className="w-1.5 h-1.5 bg-gold-400 rounded-full animate-pulse" />
               Plateforme Officielle
             </div>
@@ -765,19 +983,15 @@ export default function LandingPage() {
               </a>
             </div>
 
-            {/* Stats */}
+            {/* Stats — compteurs animés */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-3xl">
               {[
-                { icon: <Shield className="w-5 h-5" />, value: '5', label: 'Catégories' },
-                { icon: <BarChart3 className="w-5 h-5" />, value: '60+', label: 'Entreprises' },
-                { icon: <FileText className="w-5 h-5" />, value: '5', label: 'Types de dossiers' },
-                { icon: <Users className="w-5 h-5" />, value: '4', label: "Niveaux d'accès" },
-              ].map((s) => (
-                <div key={s.label} className="glass rounded-xl p-4 text-center">
-                  <div className="text-gold-400 flex justify-center mb-2">{s.icon}</div>
-                  <div className="font-serif text-2xl font-bold text-white">{s.value}</div>
-                  <div className="text-xs text-stone-500 mt-1">{s.label}</div>
-                </div>
+                { icon: <Shield className="w-5 h-5" />, value: 5, suffix: '', label: 'Catégories' },
+                { icon: <BarChart3 className="w-5 h-5" />, value: 60, suffix: '+', label: 'Entreprises' },
+                { icon: <FileText className="w-5 h-5" />, value: 5, suffix: '', label: 'Types de dossiers' },
+                { icon: <Users className="w-5 h-5" />, value: 4, suffix: '', label: "Niveaux d'accès" },
+              ].map((s, i) => (
+                <AnimatedStatCard key={s.label} icon={s.icon} value={s.value} suffix={s.suffix} label={s.label} delay={i * 120} />
               ))}
             </div>
           </div>
@@ -801,38 +1015,8 @@ export default function LandingPage() {
               const companies = dbCompanies.filter(c => c.category === cat)
               return (
                 <div key={cat} className="mb-16">
-                  <div className="flex items-center gap-4 mb-8">
-                    <span className="text-3xl">{CATEGORY_ICONS[cat]}</span>
-                    <div>
-                      <h2 className="font-serif text-2xl font-bold text-white">{label}</h2>
-                      <p className="text-stone-500 text-sm">{companies.length} entités</p>
-                    </div>
-                    <div className="flex-1 h-px bg-gradient-to-r from-gold-600/20 to-transparent ml-4" />
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                    {companies.map((company) => (
-                      <Link
-                        key={company.slug}
-                        href={`/company/${company.slug}`}
-                        className="group relative rounded-xl overflow-hidden border border-transparent hover:border-gold-600/30 transition-all duration-300"
-                        style={{ background: company.color }}
-                      >
-                        <div
-                          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                          style={{ background: `radial-gradient(circle at 50% 0%, ${company.accentColor}20, transparent 70%)` }}
-                        />
-                        <div className="p-4 relative z-10">
-                          <div className="w-2 h-2 rounded-full mb-3" style={{ backgroundColor: company.accentColor }} />
-                          <div className="font-medium text-sm text-stone-200 group-hover:text-white transition-colors leading-tight">
-                            {company.name}
-                          </div>
-                          {company.description && (
-                            <div className="text-xs text-stone-500 mt-1 leading-tight line-clamp-2">{company.description}</div>
-                          )}
-                          <ExternalLink className="w-3 h-3 text-stone-600 group-hover:text-gold-400 mt-2 transition-colors" />
-                        </div>
-                      </Link>
-                    ))}
+                  <CategoryHeader label={label} icon={CATEGORY_ICONS[cat]} count={companies.length} />
+                  <StaggerGrid companies={companies} />
                   </div>
                 </div>
               )

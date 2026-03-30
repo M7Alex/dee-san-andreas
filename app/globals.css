@@ -112,3 +112,90 @@ html, body {
   pointer-events: none;
   z-index: 0;
 }
+
+/* ── WOW Effects Added ───────────────────────────────────────────── */
+
+/* Hero title refined animation */
+@keyframes heroReveal {
+  from { opacity: 0; transform: translateY(30px) skewY(-1deg); }
+  to   { opacity: 1; transform: translateY(0) skewY(0deg); }
+}
+
+/* Company card glow pulse on load */
+@keyframes cardGlow {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50%       { box-shadow: 0 0 20px 2px rgba(232,181,32,0.08); }
+}
+
+/* Floating badge effect */
+@keyframes badgeFloat {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-3px); }
+}
+
+/* Badge animation */
+.badge-float {
+  animation: badgeFloat 3s ease-in-out infinite;
+}
+
+/* Scan line effect on glass panels */
+.glass-scan {
+  position: relative;
+  overflow: hidden;
+}
+.glass-scan::after {
+  content: '';
+  position: absolute;
+  top: -100%;
+  left: 0;
+  right: 0;
+  height: 40%;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(232, 181, 32, 0.03) 50%,
+    transparent
+  );
+  animation: glassScan 4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes glassScan {
+  0%   { top: -40%; }
+  100% { top: 110%; }
+}
+
+/* Category section line glow */
+.cat-divider {
+  background: linear-gradient(
+    90deg,
+    rgba(232, 181, 32, 0.35),
+    rgba(100, 160, 255, 0.15),
+    transparent
+  );
+}
+
+/* Subtle noise texture overlay on cards */
+.card-noise::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* Better nav dropdown */
+.nav-dropdown {
+  animation: dropIn 0.18s cubic-bezier(0.23, 1, 0.32, 1);
+}
+@keyframes dropIn {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Section fade-in for hero */
+.hero-enter {
+  animation: heroReveal 0.9s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
