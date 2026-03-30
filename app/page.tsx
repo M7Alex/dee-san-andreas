@@ -1017,7 +1017,6 @@ export default function LandingPage() {
                 <div key={cat} className="mb-16">
                   <CategoryHeader label={label} icon={CATEGORY_ICONS[cat]} count={companies.length} />
                   <StaggerGrid companies={companies} />
-                  </div>
                 </div>
               )
             })}
