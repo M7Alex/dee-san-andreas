@@ -853,7 +853,7 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="text-stone-700 text-xs">
-              © {new Date().getFullYear()} — Système d'information gouvernemental. Usage interne uniquement.
+              © {new Date().getFullYear()} — Système d'information gouvernemental. Tout droit réservé - Propriété de Axioren | Alex Stark 
             </div>
           </div>
         </footer>
