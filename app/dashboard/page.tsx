@@ -8,7 +8,8 @@ import {
   ScrollText, LogOut, Search, Upload, Clock, Users,
   RefreshCw, Loader2, Copy, Check, Plus, Trash2,
   Eye, EyeOff, ChevronRight, UserCheck, Settings,
-  CheckSquare, Square, Lock, Unlock, Folder, FolderLock, X, Filter
+  CheckSquare, Square, Lock, Unlock, Folder, FolderLock, X, Filter,
+  Activity, BarChart3
 } from 'lucide-react'
 import { ActivityLog, Company, AdminUser, Permissions, DEFAULT_PERMISSIONS, UserRole, CustomFolder } from '@/types'
 import { CATEGORY_LABELS, CATEGORY_ICONS, COMPANIES } from '@/lib/companies-data'
@@ -1392,18 +1393,71 @@ function CompaniesList() {
 }
 
 // ─── Dashboard Home ───────────────────────────────────────────────────────────
+// ─── Score de santé animé ─────────────────────────────────────────────────────
+function HealthBar({ score, color, animated = true }: { score: number; color: string; animated?: boolean }) {
+  const [displayed, setDisplayed] = useState(0)
+  useEffect(() => {
+    if (!animated) { setDisplayed(score); return }
+    const start = performance.now()
+    const duration = 1200 + Math.random() * 400
+    const animate = (now: number) => {
+      const p = Math.min((now - start) / duration, 1)
+      const ease = 1 - Math.pow(1 - p, 3)
+      setDisplayed(Math.round(ease * score))
+      if (p < 1) requestAnimationFrame(animate)
+    }
+    const id = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(id)
+  }, [score, animated])
+
+  const getColor = (s: number) => s >= 70 ? '#22c55e' : s >= 40 ? '#f59e0b' : '#ef4444'
+  const getLabel = (s: number) => s >= 70 ? 'Actif' : s >= 40 ? 'Modéré' : 'Inactif'
+  const c = getColor(score)
+
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex-1 h-1.5 rounded-full bg-gov-700 overflow-hidden">
+        <div
+          className="h-full rounded-full transition-none"
+          style={{ width: `${displayed}%`, backgroundColor: c, transition: 'width 0.05s linear' }}
+        />
+      </div>
+      <span className="text-xs font-mono font-semibold w-7 text-right" style={{ color: c }}>{displayed}</span>
+      <span className="text-xs px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: `${c}20`, color: c }}>
+        {getLabel(score)}
+      </span>
+    </div>
+  )
+}
+
+interface CompanyScore {
+  id: string; name: string; slug: string; category: string; accentColor: string
+  score: number; status: string; totalFiles: number; filesLast7d: number
+  connexionsLast7d: number; daysSinceActivity: number | null; lastActivity: string | null
+}
+
 function DashboardHome({ stats }: { stats: Record<string, unknown> | null }) {
+  const [animKey, setAnimKey] = useState(0)
   if (!stats) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-gold-400 w-6 h-6" /></div>
+
   const recentLogs = (stats.recentLogs as ActivityLog[]) || []
   const recentFiles = (stats.recentFiles as Array<{ id: string; name: string; companySlug: string; uploadedAt: string }>) || []
+  const companyScores = (stats.companyScores as CompanyScore[]) || []
+  const alerts = stats.alerts as { inactive: number; noFiles: number; topActive: string[] } | undefined
+
+  const avgScore = companyScores.length > 0
+    ? Math.round(companyScores.reduce((a, c) => a + c.score, 0) / companyScores.length)
+    : 0
+
   return (
     <div className="space-y-6">
+      {/* Stats cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: 'Fichiers totaux', value: stats.totalFiles as number, icon: <FileText className="w-5 h-5" />, color: 'text-blue-400' },
           { label: 'Entreprises actives', value: stats.totalCompanies as number, icon: <Building2 className="w-5 h-5" />, color: 'text-green-400' },
-          { label: 'Administrateurs', value: stats.totalAdmins as number, icon: <Shield className="w-5 h-5" />, color: 'text-gold-400' },
-          { label: 'Actions récentes', value: recentLogs.length, icon: <ScrollText className="w-5 h-5" />, color: 'text-purple-400' },
+          { label: 'Score moyen DEE', value: `${avgScore}/100`, icon: <BarChart3 className="w-5 h-5" />, color: avgScore >= 70 ? 'text-green-400' : avgScore >= 40 ? 'text-amber-400' : 'text-red-400' },
+          { label: 'Admins', value: stats.totalAdmins as number, icon: <Shield className="w-5 h-5" />, color: 'text-gold-400' },
         ].map(s => (
           <div key={s.label} className="glass rounded-2xl p-5 border border-white/5">
             <div className={`mb-3 ${s.color}`}>{s.icon}</div>
@@ -1412,6 +1466,77 @@ function DashboardHome({ stats }: { stats: Record<string, unknown> | null }) {
           </div>
         ))}
       </div>
+
+      {/* Alertes */}
+      {alerts && (alerts.inactive > 0 || alerts.noFiles > 0) && (
+        <div className="glass rounded-2xl p-4 border border-amber-500/20 bg-amber-950/10">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Alertes automatiques</span>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {alerts.inactive > 0 && (
+              <span className="text-xs bg-red-950/50 border border-red-800/30 text-red-400 px-3 py-1.5 rounded-lg">
+                {alerts.inactive} entreprise{alerts.inactive > 1 ? 's' : ''} inactive{alerts.inactive > 1 ? 's' : ''}
+              </span>
+            )}
+            {alerts.noFiles > 0 && (
+              <span className="text-xs bg-amber-950/50 border border-amber-800/30 text-amber-400 px-3 py-1.5 rounded-lg">
+                {alerts.noFiles} entreprise{alerts.noFiles > 1 ? 's' : ''} sans fichier
+              </span>
+            )}
+            {alerts.topActive.length > 0 && (
+              <span className="text-xs bg-green-950/50 border border-green-800/30 text-green-400 px-3 py-1.5 rounded-lg">
+                Top actif : {alerts.topActive.join(', ')}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Radar de santé économique */}
+      <div className="glass rounded-2xl p-5 border border-white/5">
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <Activity className="w-4 h-4 text-gold-400" />
+            Indice de santé économique
+            <span className="text-xs text-stone-600 font-normal">(admin uniquement)</span>
+          </h3>
+          <button onClick={() => setAnimKey(k => k + 1)} className="text-xs text-stone-600 hover:text-gold-400 flex items-center gap-1 transition-colors">
+            <RefreshCw className="w-3 h-3" /> Réactualiser
+          </button>
+        </div>
+        {companyScores.length === 0 ? (
+          <p className="text-stone-600 text-sm text-center py-8">Aucune entreprise à analyser</p>
+        ) : (
+          <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+            {companyScores.map((c, i) => (
+              <div key={c.id} className="group flex items-center gap-3 p-3 rounded-xl hover:bg-gov-800/40 transition-colors">
+                <div className="w-1.5 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: c.accentColor || '#888' }} />
+                <div className="min-w-0 w-36 flex-shrink-0">
+                  <div className="text-sm font-medium text-white truncate">{c.name}</div>
+                  <div className="text-xs text-stone-600 capitalize">{CATEGORY_LABELS[c.category] || c.category}</div>
+                </div>
+                <div className="flex-1">
+                  <HealthBar key={`${animKey}-${c.id}`} score={c.score} color={c.accentColor} animated={i < 10} />
+                </div>
+                <div className="flex gap-4 text-xs text-stone-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span title="Fichiers cette semaine">📁 {c.filesLast7d}/7j</span>
+                  <span title="Connexions cette semaine">🔑 {c.connexionsLast7d}</span>
+                  {c.daysSinceActivity !== null && (
+                    <span title="Jours depuis dernière activité">⏱ {c.daysSinceActivity}j</span>
+                  )}
+                </div>
+                <Link href={`/company/${c.slug}`} className="text-stone-700 hover:text-gold-400 opacity-0 group-hover:opacity-100 transition-all">
+                  <ChevronRight className="w-4 h-4" />
+                </Link>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Activité récente + derniers fichiers */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="glass rounded-2xl p-5 border border-white/5">
           <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Upload className="w-4 h-4 text-gold-400" />Derniers fichiers</h3>
