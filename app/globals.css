@@ -199,3 +199,154 @@ html, body {
   animation: heroReveal 0.9s cubic-bezier(0.23, 1, 0.32, 1) forwards;
 }
 
+
+/* ══════════════════════════════════════════════════════════════════
+   HEADER SCAN-LINE + HUD
+   ══════════════════════════════════════════════════════════════════ */
+
+.scan-header-wrap {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Ligne de scan principale */
+.scan-line-el {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  top: -2px;
+  z-index: 10;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(232, 181, 32, 0) 10%,
+    rgba(232, 181, 32, 0.8) 40%,
+    rgba(255, 220, 80, 1) 50%,
+    rgba(232, 181, 32, 0.8) 60%,
+    rgba(232, 181, 32, 0) 90%,
+    transparent 100%
+  );
+  box-shadow: 0 0 12px 2px rgba(232, 181, 32, 0.4), 0 0 30px 4px rgba(232, 181, 32, 0.15);
+  opacity: 0;
+}
+
+/* Classe ajoutée par le JS pour déclencher le scan */
+.scan-line-el.scan-running {
+  animation: headerScan 1.1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes headerScan {
+  0%   { top: -2px;   opacity: 0; }
+  8%   { opacity: 1; }
+  92%  { opacity: 1; }
+  100% { top: calc(100% + 2px); opacity: 0; }
+}
+
+/* Reflet lumineux derrière la ligne */
+.scan-line-el.scan-running::after {
+  content: '';
+  position: absolute;
+  inset: -6px 0;
+  background: inherit;
+  filter: blur(8px);
+  opacity: 0.4;
+}
+
+/* Barre HUD en bas du header */
+.hud-status-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.hud-status-bar span {
+  font-family: var(--font-fira);
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(232, 181, 32, 0.25);
+  padding: 0 16px;
+  position: relative;
+}
+
+.hud-status-bar span::after {
+  content: '·';
+  position: absolute;
+  right: 0;
+  color: rgba(232, 181, 32, 0.15);
+}
+
+.hud-status-bar span:last-child::after {
+  display: none;
+}
+
+/* Coins HUD dans les angles du header */
+.scan-header-wrap::before,
+.scan-header-wrap::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  opacity: 0.35;
+  pointer-events: none;
+  z-index: 5;
+}
+.scan-header-wrap::before {
+  top: 6px;
+  left: 8px;
+  border-top: 1px solid rgba(232, 181, 32, 0.6);
+  border-left: 1px solid rgba(232, 181, 32, 0.6);
+}
+.scan-header-wrap::after {
+  top: 6px;
+  right: 8px;
+  border-top: 1px solid rgba(232, 181, 32, 0.6);
+  border-right: 1px solid rgba(232, 181, 32, 0.6);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   TRANSITIONS DE PAGE
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Overlay de transition injecté via JS */
+#page-transition-overlay {
+  transition: opacity 0.35s ease, backdrop-filter 0.35s ease;
+}
+
+/* Entrée des pages avec fade-in depuis le bas */
+.page-enter {
+  animation: pageEnter 0.55s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0px);
+  }
+}
+
+/* Logo aigle dans le header — couleur gold par défaut */
+.header-eagle {
+  color: rgba(232, 181, 32, 0.9);
+  filter: drop-shadow(0 0 4px rgba(232, 181, 32, 0.3));
+  transition: filter 0.3s ease, color 0.3s ease;
+}
+.header-eagle:hover {
+  filter: drop-shadow(0 0 8px rgba(232, 181, 32, 0.6));
+}

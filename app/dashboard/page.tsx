@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { EagleLogo } from '@/components/EagleLogo'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -85,7 +86,7 @@ function SidebarNav({ active, role, permissions, onTabChange }: {
       <div className="p-6 border-b border-white/5">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-gold-500/10 border border-gold-500/30 flex items-center justify-center">
-            <span className="text-gold-400 text-sm font-bold font-serif">SA</span>
+            <EagleLogo size={20} className="header-eagle" />
           </div>
           <div>
             <div className="text-white font-medium text-sm font-serif">DEE</div>

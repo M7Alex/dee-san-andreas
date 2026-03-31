@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { ScanHeader } from '@/components/ScanHeader'
+import { EagleLogo } from '@/components/EagleLogo'
 import {
   ArrowLeft, Lock, Unlock, Upload, FileText,
   Trash2, Pin, PinOff, Search, Folder, FolderPlus,
@@ -670,30 +672,34 @@ export default function CompanyPage() {
         </div>
       )}
 
-      <div className="min-h-screen" style={{ backgroundColor: company.color }}>
+      <div className="min-h-screen page-enter" style={{ backgroundColor: company.color }}>
         <div className="fixed inset-0 pointer-events-none overflow-hidden">
           <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full blur-3xl opacity-8"
             style={{ backgroundColor: company.accentColor }} />
         </div>
 
-        <header className="sticky top-0 z-50 glass border-b border-white/5">
-          <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <ScanHeader>
+          <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
             <div className="flex items-center gap-4">
+              {/* Logo aigle */}
+              <div className="w-8 h-8 rounded-xl bg-gold-500/10 border border-gold-500/20 flex items-center justify-center flex-shrink-0">
+                <EagleLogo size={18} className="header-eagle" />
+              </div>
               {isStaff ? (
                 <Link href="/dashboard" className="flex items-center gap-1.5 text-stone-500 hover:text-gold-400 text-sm transition-colors">
                   <ArrowLeft className="w-4 h-4" /> Dashboard
                 </Link>
               ) : (
-                <Link href="/" className="text-stone-500 hover:text-stone-300 transition-colors">
-                  <ArrowLeft className="w-5 h-5" />
+                <Link href="/" className="flex items-center gap-1.5 text-stone-500 hover:text-stone-300 text-sm transition-colors">
+                  <ArrowLeft className="w-4 h-4" /> Accueil
                 </Link>
               )}
-              <div className="w-px h-6 bg-stone-700" />
+              <div className="w-px h-6 bg-stone-700/60" />
               <div className="flex items-center gap-3">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: company.accentColor }} />
+                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: company.accentColor }} />
                 <div>
-                  <h1 className="font-serif text-white font-semibold">{company.name}</h1>
-                  <p className="text-xs text-stone-500 capitalize">{company.category}</p>
+                  <h1 className="font-serif text-white font-semibold text-sm leading-tight">{company.name}</h1>
+                  <p className="text-[10px] text-stone-500 capitalize tracking-wider font-mono">{company.category}</p>
                 </div>
               </div>
             </div>
@@ -702,7 +708,7 @@ export default function CompanyPage() {
               {isStaff ? 'Accès staff' : 'Accès entreprise'}
             </div>
           </div>
-        </header>
+        </ScanHeader>
 
         <div className="max-w-6xl mx-auto px-6 py-8 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
