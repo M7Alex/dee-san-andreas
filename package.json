@@ -13,6 +13,7 @@
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
+    "docx": "^8.5.0",
     "framer-motion": "^11.2.10",
     "iron-session": "^8.0.3",
     "jose": "^5.3.0",
