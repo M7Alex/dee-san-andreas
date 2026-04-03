@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { EagleLogo } from '@/components/EagleLogo'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -11,9 +11,9 @@ import {
   Eye, EyeOff, ChevronRight, UserCheck, Settings,
   CheckSquare, Square, Lock, Unlock, Folder, FolderLock, X, Filter,
   Activity, BarChart3, Globe, AlertTriangle, TrendingUp,
-  ChevronLeft, Menu, Bell
+  ChevronLeft, Menu, Bell, FileEdit, Save, Printer
 } from 'lucide-react'
-import { ActivityLog, Company, AdminUser, Permissions, DEFAULT_PERMISSIONS, UserRole, CustomFolder } from '@/types'
+import { ActivityLog, Company, AdminUser, Permissions, DEFAULT_PERMISSIONS, UserRole, CustomFolder, BagDraft, BagContent } from '@/types'
 import { CATEGORY_LABELS, CATEGORY_ICONS, COMPANIES } from '@/lib/companies-data'
 import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -97,6 +97,7 @@ function SidebarNav({ active, role, permissions, onTabChange, collapsed, onToggl
     { id: 'pins', label: 'Gestion PINs', icon: Key, show: tabs.includes('pins'), section: 'admin' },
     { id: 'folders', label: 'Dossiers', icon: FolderLock, show: tabs.includes('folders') || isSuperAdmin || (isAdmin && (permissions?.canManageFolders ?? false)), section: 'admin' },
     { id: 'logs', label: 'Journaux', icon: ScrollText, show: tabs.includes('logs'), section: 'system' },
+    { id: 'documents', label: 'Documents B.A.G.', icon: FileEdit, always: true, section: 'main' },
     { id: 'connexions', label: 'Connexions', icon: UserCheck, show: isSuperAdmin, section: 'system' },
   ].filter(i => i.always || i.show)
 
@@ -724,7 +725,7 @@ function ConnexionsAdmins() {
         <p className="text-xs text-stone-500">Les adresses IP sont hachées de façon irréversible — jamais stockées en clair.</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {Object.entries(stats).map(([name, data]) => (
+        {(Object.entries(stats) as [string, { count: number; lastLogin: string }][]).map(([name, data]) => (
           <div key={name} className="panel">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-xs font-bold">
@@ -1418,6 +1419,595 @@ function PageLoader() {
   )
 }
 
+// ─── Documents Manager ───────────────────────────────────────────────────────
+function DocumentsManager({ myRole, myUserId }: { myRole: string; myUserId: string }) {
+  const isStaff = myRole === 'superadmin' || myRole === 'admin'
+  const [docs, setDocs] = useState<BagDraft[]>([])
+  const [loading, setLoading] = useState(true)
+  const [view, setView] = useState<'list' | 'editor'>('list')
+  const [activeDoc, setActiveDoc] = useState<BagDraft | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [newTitle, setNewTitle] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [filterOwner, setFilterOwner] = useState<'mine' | 'all'>('mine')
+  const [search, setSearch] = useState('')
+  const autoSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => { loadDocs() }, [])
+
+  async function loadDocs() {
+    setLoading(true)
+    const res = await fetch('/api/documents')
+    const data = await res.json()
+    if (Array.isArray(data)) setDocs(data)
+    setLoading(false)
+  }
+
+  async function createDoc() {
+    if (!newTitle.trim()) return
+    setSaving(true)
+    const res = await fetch('/api/documents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: newTitle }),
+    })
+    const data = await res.json()
+    if (data.doc) {
+      setDocs(prev => [data.doc, ...prev])
+      setActiveDoc(data.doc)
+      setView('editor')
+      setCreating(false)
+      setNewTitle('')
+    }
+    setSaving(false)
+  }
+
+  async function saveDoc(doc: BagDraft) {
+    setSaving(true)
+    await fetch('/api/documents', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ docId: doc.id, title: doc.title, content: doc.content, status: doc.status }),
+    })
+    setDocs(prev => prev.map(d => d.id === doc.id ? { ...doc, updatedAt: new Date().toISOString() } : d))
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+    setSaving(false)
+  }
+
+  async function deleteDoc(docId: string) {
+    if (!confirm('Supprimer ce document ?')) return
+    await fetch('/api/documents', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ docId }),
+    })
+    setDocs(prev => prev.filter(d => d.id !== docId))
+    if (activeDoc?.id === docId) { setActiveDoc(null); setView('list') }
+  }
+
+  function updateContent(key: keyof BagContent, value: unknown) {
+    if (!activeDoc) return
+    const updated = { ...activeDoc, content: { ...activeDoc.content, [key]: value } }
+    setActiveDoc(updated)
+    if (autoSaveRef.current) clearTimeout(autoSaveRef.current)
+    autoSaveRef.current = setTimeout(() => saveDoc(updated), 2500)
+  }
+
+  const filtered = docs.filter(d => {
+    if (filterOwner === 'mine' && d.ownerId !== myUserId) return false
+    if (search && !d.title.toLowerCase().includes(search.toLowerCase()) && !d.ownerLabel.toLowerCase().includes(search.toLowerCase())) return false
+    return true
+  })
+
+  if (view === 'editor' && activeDoc) {
+    return (
+      <div>
+        <style jsx global>{`
+          @media print {
+            body * { visibility: hidden; }
+            .print-zone, .print-zone * { visibility: visible; }
+            .print-zone { position: fixed; top: 0; left: 0; width: 100%; padding: 20px; background: white; color: black; }
+            .no-print { display: none !important; }
+          }
+        `}</style>
+
+        {/* Toolbar */}
+        <div className="no-print flex items-center gap-3 mb-6 flex-wrap">
+          <button onClick={() => { setView('list'); if (autoSaveRef.current) clearTimeout(autoSaveRef.current) }}
+            className="btn-ghost text-xs flex items-center gap-1.5">
+            <ChevronLeft className="w-3.5 h-3.5" />Retour
+          </button>
+          <input
+            value={activeDoc.title}
+            onChange={e => setActiveDoc({ ...activeDoc, title: e.target.value })}
+            onBlur={() => saveDoc(activeDoc)}
+            className="flex-1 bg-transparent border-b border-stone-700 focus:border-amber-500 text-white font-semibold text-base outline-none px-2 py-1 transition-colors min-w-0"
+          />
+          <div className="flex items-center gap-2 flex-wrap">
+            {saving && <span className="text-xs text-stone-500 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Auto-save...</span>}
+            {saved && !saving && <span className="text-xs text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3" />Sauvegardé</span>}
+            <select
+              value={activeDoc.status}
+              onChange={e => { const upd = { ...activeDoc, status: e.target.value as 'draft' | 'finalized' }; setActiveDoc(upd); saveDoc(upd) }}
+              className="form-input text-xs py-1.5 px-3 cursor-pointer"
+            >
+              <option value="draft">📝 Brouillon</option>
+              <option value="finalized">✅ Finalisé</option>
+            </select>
+            <button onClick={() => saveDoc(activeDoc)} className="btn-primary text-xs py-2 px-4">
+              <Save className="w-3.5 h-3.5" />Sauvegarder
+            </button>
+            <button onClick={() => window.print()} className="btn-secondary text-xs py-2">
+              <Printer className="w-3.5 h-3.5" />Export PDF
+            </button>
+          </div>
+        </div>
+
+        <div className="print-zone">
+          <BagEditor doc={activeDoc} onUpdate={updateContent} />
+        </div>
+      </div>
+    )
+  }
+
+  // ── Liste des documents ──
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h2 className="text-white font-bold text-lg font-serif">Documents B.A.G.</h2>
+          <p className="text-xs text-stone-500 mt-0.5">Bilans d&#39;Audit Global — templates éditables · export PDF</p>
+        </div>
+        <button onClick={() => setCreating(true)} className="btn-primary">
+          <Plus className="w-4 h-4" />Nouveau B.A.G.
+        </button>
+      </div>
+
+      {creating && (
+        <div className="panel animate-slide-down">
+          <h3 className="text-white font-semibold text-sm mb-3">Nouveau Bilan d&#39;Audit Global</h3>
+          <div className="flex gap-3">
+            <input
+              value={newTitle}
+              onChange={e => setNewTitle(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && createDoc()}
+              placeholder="Ex : BAG — Maze Bank — 03/04/2026"
+              className="form-input flex-1"
+              autoFocus
+            />
+            <button onClick={createDoc} disabled={saving || !newTitle.trim()} className="btn-primary">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Créer'}
+            </button>
+            <button onClick={() => { setCreating(false); setNewTitle('') }} className="btn-ghost">Annuler</button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="search-bar flex-1 min-w-48">
+          <Search className="search-icon" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher..." className="search-input" />
+        </div>
+        {isStaff && (
+          <div className="flex gap-2">
+            <button onClick={() => setFilterOwner('mine')} className={`filter-chip ${filterOwner === 'mine' ? 'filter-chip-active' : 'filter-chip-inactive'}`}>Mes documents</button>
+            <button onClick={() => setFilterOwner('all')} className={`filter-chip ${filterOwner === 'all' ? 'filter-chip-active' : 'filter-chip-inactive'}`}>Tous</button>
+          </div>
+        )}
+      </div>
+
+      {loading ? <PageLoader /> : filtered.length === 0 ? (
+        <div className="empty-state">
+          <FileEdit className="w-12 h-12 mx-auto mb-3 opacity-20" />
+          <p>{search ? 'Aucun document trouvé' : 'Aucun document — créez votre premier B.A.G.'}</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((doc, i) => (
+            <div key={doc.id} className="panel hover:border-white/10 transition-all group flex items-center gap-4"
+              style={{ animationDelay: `${i * 40}ms` }}>
+              <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center"
+                style={{ background: doc.status === 'finalized' ? 'rgba(52,211,153,0.1)' : 'rgba(245,181,32,0.08)', border: `1px solid ${doc.status === 'finalized' ? 'rgba(52,211,153,0.2)' : 'rgba(245,181,32,0.15)'}` }}>
+                <FileEdit className="w-5 h-5" style={{ color: doc.status === 'finalized' ? '#34d399' : '#f59e0b' }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-white font-semibold text-sm truncate">{doc.title}</span>
+                  <span className={`tag text-xs ${doc.status === 'finalized' ? 'tag-green' : 'tag-amber'}`}>
+                    {doc.status === 'finalized' ? '✅ Finalisé' : '📝 Brouillon'}
+                  </span>
+                  {filterOwner === 'all' && doc.ownerId !== myUserId && (
+                    <span className="tag text-xs">{doc.ownerLabel}</span>
+                  )}
+                </div>
+                <div className="text-xs text-stone-600 mt-0.5">
+                  {doc.content.entreprise && <span>{doc.content.entreprise} · </span>}
+                  Modifié {new Date(doc.updatedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => { setActiveDoc(doc); setView('editor') }} className="icon-btn" title="Ouvrir">
+                  <FileEdit className="w-4 h-4" />
+                </button>
+                {(doc.ownerId === myUserId || isStaff) && (
+                  <button onClick={() => deleteDoc(doc.id)} className="icon-btn icon-btn-danger" title="Supprimer">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── BagEditor ────────────────────────────────────────────────────────────────
+function BagEditor({ doc, onUpdate }: { doc: BagDraft; onUpdate: (key: keyof BagContent, value: unknown) => void }) {
+  const c = doc.content
+
+  // Champ texte simple
+  function fi(label: string, key: keyof BagContent, placeholder?: string) {
+    return (
+      <div className="form-group">
+        <label className="form-label">{label}</label>
+        <input
+          value={(c[key] as string) || ''}
+          onChange={e => onUpdate(key, e.target.value)}
+          placeholder={placeholder || `[ ${label} ]`}
+          className="form-input"
+        />
+      </div>
+    )
+  }
+
+  // Zone de texte multiligne
+  function ta(label: string, key: keyof BagContent, rows = 3) {
+    return (
+      <div className="form-group">
+        <label className="form-label">{label}</label>
+        <textarea
+          value={(c[key] as string) || ''}
+          onChange={e => onUpdate(key, e.target.value)}
+          rows={rows}
+          placeholder={`[ ${label} ]`}
+          className="form-input resize-none"
+          style={{ minHeight: `${rows * 32}px` }}
+        />
+      </div>
+    )
+  }
+
+  // Groupe de boutons radio (cases à cocher exclusives)
+  function radioGroup(label: string, key: keyof BagContent, options: { value: string; label: string }[]) {
+    return (
+      <div className="form-group">
+        <label className="form-label">{label}</label>
+        <div className="flex flex-wrap gap-2 mt-1">
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => onUpdate(key, (c[key] as string) === opt.value ? '' : opt.value)}
+              className={`filter-chip ${(c[key] as string) === opt.value ? 'filter-chip-active' : 'filter-chip-inactive'}`}
+            >
+              {(c[key] as string) === opt.value ? '◉' : '○'} {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // Case à cocher avec contenu conditionnel
+  function cb(label: string, key: keyof BagContent, extra?: ReactNode) {
+    return (
+      <div className="flex items-start gap-3 py-2 border-b border-stone-800/50 last:border-0">
+        <button
+          onClick={() => onUpdate(key, !(c[key] as boolean))}
+          className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${c[key] ? 'bg-amber-500 border-amber-500' : 'border-stone-600 hover:border-stone-400'}`}
+        >
+          {c[key] && <Check className="w-3 h-3 text-stone-900" />}
+        </button>
+        <div className="flex-1">
+          <span className="text-sm text-stone-300">{label}</span>
+          {extra && <div className="mt-2">{extra}</div>}
+        </div>
+      </div>
+    )
+  }
+
+  // En-tête de section
+  function sec(num: string, title: string) {
+    return (
+      <div className="flex items-center gap-3 mb-5 pb-2" style={{ borderBottom: '1px solid rgba(201,162,39,0.25)' }}>
+        <span className="text-amber-400 font-bold text-xs font-mono bg-amber-500/10 border border-amber-500/20 rounded-lg px-2 py-1">{num}</span>
+        <h3 className="text-white font-bold font-serif text-base">{title}</h3>
+      </div>
+    )
+  }
+
+  // En-tête d'annexe
+  function anx(letter: string, title: string) {
+    return (
+      <div className="flex items-center gap-3 mb-5 mt-2 pb-2" style={{ borderBottom: '2px solid rgba(201,162,39,0.3)' }}>
+        <span className="text-amber-400 font-bold text-sm font-mono bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-1">ANNEXE {letter}</span>
+        <h3 className="text-white font-bold font-serif text-base">{title}</h3>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6 max-w-4xl">
+
+      {/* ── Page de garde ── */}
+      <div className="panel border-amber-500/20">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-1.5 h-6 rounded bg-amber-500" />
+          <span className="text-amber-400 font-bold text-xs uppercase tracking-widest">Page de garde</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {fi("Entreprise auditée", 'entreprise', "Nom de l'entreprise")}
+          {fi("Secteur / Pôle", 'secteur', "Ex : Production, Restauration...")}
+          {fi("Référence dossier", 'refDossier', "BAG-AAAA-XXX")}
+          {fi("Contrôleur fiscal", 'controleur', "Nom Prénom")}
+          {fi("Date de l'audit", 'dateAudit', "JJ/MM/AAAA")}
+          {fi("Période contrôlée", 'periodeControlee')}
+        </div>
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {radioGroup("Type de contrôle", 'typeControle', [
+            { value: 'routine', label: 'Routine' },
+            { value: 'anomalie', label: 'Suite à anomalie' },
+            { value: 'reprise', label: 'Reprise' },
+          ])}
+          {radioGroup("État financier", 'etatFinancier', [
+            { value: 'stable', label: '🟢 Stable' },
+            { value: 'moyen', label: '🟡 Moyen' },
+            { value: 'mauvais', label: '🔴 Mauvais' },
+          ])}
+        </div>
+      </div>
+
+      {/* ── Section I — Cadre juridique ── */}
+      <div className="panel">
+        {sec('I', 'Cadre Juridique & Contexte')}
+        <div className="space-y-4">
+          {fi("Identité du gestionnaire", 'identiteGestionnaire', "Nom, Prénom, titre")}
+          {fi("Date de prise de fonction", 'datePriseFonction', "JJ/MM/AAAA")}
+          {ta("Contexte de l'audit", 'contextAudit', 3)}
+          {radioGroup("Évaluation de la coopération", 'evaluationCooperation', [
+            { value: 'totale', label: '✅ Totale' },
+            { value: 'partielle', label: '⚠️ Partielle' },
+            { value: 'refus', label: '🚫 Refus' },
+          ])}
+          {ta("Observations comportementales", 'observationsComportementales', 2)}
+        </div>
+      </div>
+
+      {/* ── Section II — Analyse opérationnelle ── */}
+      <div className="panel">
+        {sec('II', 'Analyse Opérationnelle')}
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {fi("Effectif actuel", 'effectifActuel', "Nombre de salariés")}
+            {fi("Postes vacants", 'postesVacants', "Oui / Non")}
+            {fi("Horaires d'ouverture", 'horaires', "Jours / Plages")}
+          </div>
+          {radioGroup("Stabilité des équipes", 'stabiliteEquipes', [
+            { value: 'stable', label: 'Stable' },
+            { value: 'turnover', label: 'Turnover élevé' },
+            { value: 'recrutement', label: 'Recrutement en cours' },
+          ])}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {radioGroup("Maîtrise des stocks", 'maitiseStocks', [
+              { value: 'bonne', label: 'Bonne' },
+              { value: 'moyenne', label: 'Moyenne' },
+              { value: 'insuffisante', label: 'Insuffisante' },
+            ])}
+            {radioGroup("Flux de clientèle", 'fluxClientele', [
+              { value: 'regulier', label: 'Régulier' },
+              { value: 'irregulier', label: 'Irrégulier' },
+              { value: 'faible', label: 'Faible' },
+            ])}
+            {radioGroup("Modèle économique", 'modeleEconomique', [
+              { value: 'passage', label: 'Clientèle de passage' },
+              { value: 'contrats', label: 'Contrats' },
+              { value: 'mixte', label: 'Mixte' },
+            ])}
+            {radioGroup("Dépendance externe", 'dependanceExterne', [
+              { value: 'autonome', label: 'Autonome' },
+              { value: 'partielle', label: 'Partiellement dépendante' },
+              { value: 'dependante', label: 'Très dépendante' },
+            ])}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {fi("Difficulté #1", 'difficulte1', "Manque personnel / Concurrence...")}
+            {fi("Difficulté #2", 'difficulte2', "(si applicable)")}
+            {fi("Difficulté #3", 'difficulte3', "(si applicable)")}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Section III — Bilan comptable ── */}
+      <div className="panel">
+        {sec('III', 'Bilan Comptable & Décisionnel')}
+        <div className="space-y-5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {fi("Trésorerie déclarée", 'tresorerieDeclaree', "0 $")}
+            {fi("Trésorerie réelle", 'tresorerieReelle', "0 $")}
+            {fi("Solde après frais", 'soldeApresFrais', "0 $")}
+            {fi("Impôt estimé", 'impotDu', "0 $")}
+          </div>
+
+          {/* Tableau des 3 semaines */}
+          <div>
+            <label className="form-label mb-3">Vérification 3 dernières semaines</label>
+            <div className="overflow-x-auto rounded-xl border border-white/5">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ background: 'rgba(13,27,62,0.9)' }}>
+                    {["Semaine", "Déclaration ✓", "Paiement ✓", "Justificatifs ✓", "Anomalie"].map(h => (
+                      <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-amber-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(['semaine1', 'semaine2', 'semaine3'] as const).map((sk, i) => {
+                    const s = c[sk]
+                    return (
+                      <tr key={sk} style={{ background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                        <td className="px-3 py-2.5 text-stone-400 text-xs font-bold">S-{3 - i}</td>
+                        {(['declaration', 'paiement', 'justificatifs'] as const).map(field => (
+                          <td key={field} className="px-3 py-2.5">
+                            <button
+                              onClick={() => onUpdate(sk, { ...s, [field]: !s[field] })}
+                              className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${s[field] ? 'bg-emerald-500 border-emerald-500' : 'border-stone-600 hover:border-stone-400'}`}
+                            >
+                              {s[field] && <Check className="w-3.5 h-3.5 text-white" />}
+                            </button>
+                          </td>
+                        ))}
+                        <td className="px-3 py-2.5">
+                          <input
+                            value={s.anomalie}
+                            onChange={e => onUpdate(sk, { ...s, anomalie: e.target.value })}
+                            placeholder="Aucune"
+                            className="form-input py-1 text-xs"
+                          />
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {radioGroup("Qualification du cas", 'qualificationCas', [
+            { value: 'simple', label: '⚠️ Cas Simple' },
+            { value: 'grave', label: '🚨 Cas Grave — Fraude' },
+            { value: 'conformite', label: '✅ Conformité' },
+          ])}
+          {ta("Détail des anomalies", 'detailAnomalies', 3)}
+        </div>
+      </div>
+
+      {/* ── Section IV — Préconisations ── */}
+      <div className="panel">
+        {sec('IV', 'Préconisations & Conclusions')}
+        <div className="space-y-4">
+          {ta("Conclusion de viabilité", 'conclusionViabilite', 2)}
+
+          <div>
+            <label className="form-label mb-2">Mesures applicables</label>
+            <div className="space-y-0">
+              {cb("Redressement fiscal", 'mesureRedressement',
+                c.mesureRedressement ? fi("Montant", 'montantRedressement', "0 $") : undefined
+              )}
+              {cb("Amende", 'mesureAmende',
+                c.mesureAmende ? fi("Montant amende", 'montantAmende', "0 $") : undefined
+              )}
+              {cb("Exonération fiscale", 'mesureExoneration',
+                c.mesureExoneration ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    {fi("Durée", 'dureeExoneration', "X semaines")}
+                    {fi("Motif", 'motifExoneration')}
+                  </div>
+                ) : undefined
+              )}
+              {cb("Subvention de fonctionnement", 'mesureSubvFonctionnement',
+                c.mesureSubvFonctionnement ? fi("Montant", 'montantSubvFonct', "0 $") : undefined
+              )}
+              {cb("Subvention d'urgence", 'mesureSubvUrgence',
+                c.mesureSubvUrgence ? fi("Montant", 'montantSubvUrgence', "0 $") : undefined
+              )}
+              {cb("Aide au recrutement / formation", 'mesureAideRH')}
+              {cb("Fermeture administrative", 'mesureFermeture',
+                c.mesureFermeture ? fi("Motif", 'motifFermeture') : undefined
+              )}
+              {cb("Transmission dossier Fraude Fiscale", 'mesureFraude')}
+            </div>
+            <div className="mt-3">{fi("Autre mesure", 'mesureAutre', "Préciser...")}</div>
+          </div>
+
+          <div className="panel" style={{ background: 'rgba(201,162,39,0.04)', borderColor: 'rgba(201,162,39,0.2)' }}>
+            <label className="form-label mb-3">Résumé pour post Discord</label>
+            <div className="space-y-3">
+              {ta("Situation (1-2 lignes)", 'resumeSituation', 2)}
+              <div className="grid grid-cols-2 gap-3">
+                {fi("Subvention reçue", 'subventionRecue', "Montant ou X")}
+                {fi("Motif subvention", 'motifSubvention', "Motif ou X")}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {fi("Lieu et date", 'lieuDate', "Los Santos, JJ/MM/AAAA")}
+            {fi("Contrôleur fiscal", 'nomControleur', "Nom Prénom")}
+            {fi("Validé par (DOF)", 'validePar', "Nom Prénom")}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Annexe A — Expertise comptable ── */}
+      <div className="panel">
+        {anx('A', 'Expertise Comptable & Conseil Entreprise')}
+        <div className="space-y-5">
+          {fi("Source principale de revenus", 'source1', "Contrats / Clientèle de passage...")}
+          {fi("Sources secondaires", 'source2', "Partenariats / Contrats inter-entreprises...")}
+          {fi("Dépendance à des tiers", 'sourceDependance', "Fournisseurs / Clients majeurs...")}
+
+          {/* Tableau des charges */}
+          <div>
+            <label className="form-label mb-2">Structure des charges</label>
+            <div className="overflow-x-auto rounded-xl border border-white/5">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ background: 'rgba(13,27,62,0.9)' }}>
+                    {["Poste de charge", "Montant ($)", "Fréquence", "Commentaire", ""].map((h, i) => (
+                      <th key={i} className="px-3 py-2.5 text-left text-xs font-semibold text-amber-400 uppercase tracking-wider">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {c.charges.map((ch, i) => (
+                    <tr key={i} style={{ background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                      <td className="px-2 py-1.5"><input value={ch.poste} onChange={e => { const arr = [...c.charges]; arr[i] = { ...ch, poste: e.target.value }; onUpdate('charges', arr) }} className="form-input py-1 text-xs" /></td>
+                      <td className="px-2 py-1.5"><input value={ch.montant} onChange={e => { const arr = [...c.charges]; arr[i] = { ...ch, montant: e.target.value }; onUpdate('charges', arr) }} placeholder="0 $" className="form-input py-1 text-xs" /></td>
+                      <td className="px-2 py-1.5"><input value={ch.frequence} onChange={e => { const arr = [...c.charges]; arr[i] = { ...ch, frequence: e.target.value }; onUpdate('charges', arr) }} className="form-input py-1 text-xs" /></td>
+                      <td className="px-2 py-1.5"><input value={ch.commentaire} onChange={e => { const arr = [...c.charges]; arr[i] = { ...ch, commentaire: e.target.value }; onUpdate('charges', arr) }} placeholder="—" className="form-input py-1 text-xs" /></td>
+                      <td className="px-2 py-1.5">
+                        <button onClick={() => { const arr = c.charges.filter((_, idx) => idx !== i); onUpdate('charges', arr) }} className="icon-btn icon-btn-danger w-6 h-6">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <button onClick={() => onUpdate('charges', [...c.charges, { poste: '', montant: '', frequence: 'Hebdomadaire', commentaire: '' }])}
+              className="btn-ghost text-xs mt-2 py-1.5">
+              <Plus className="w-3 h-3" />Ajouter une ligne
+            </button>
+          </div>
+
+          {/* Recommandations */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {ta("Recommandation court terme", 'reco1', 2)}
+            {ta("Recommandation moyen terme", 'reco2', 2)}
+            {ta("Recommandation long terme", 'reco3', 2)}
+            {ta("Points d'attention / Risques", 'recoPoinPoints', 2)}
+          </div>
+        </div>
+      </div>
+
+    </div>
+  )
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const router = useRouter()
@@ -1453,6 +2043,7 @@ export default function DashboardPage() {
   )
 
   const TAB_TITLES: Record<string, string> = {
+    documents: 'Documents B.A.G.',
     dashboard: 'Tableau de bord',
     companies: 'Entreprises',
     logs: "Journaux d'activité",
@@ -1464,7 +2055,7 @@ export default function DashboardPage() {
   }
 
   const TAB_ICONS: Record<string, string> = {
-    dashboard: '🏛️', companies: '🏢', logs: '📋', pins: '🔑',
+    documents: '📝', dashboard: '🏛️', companies: '🏢', logs: '📋', pins: '🔑',
     folders: '📁', 'companies-new': '➕', admins: '👥', connexions: '🔓',
   }
 
@@ -1830,6 +2421,7 @@ export default function DashboardPage() {
               {tab === 'companies-new' && <CompanyCreator />}
               {tab === 'admins' && <UserManager myRole={role} myUserId={userId} />}
               {tab === 'connexions' && role === 'superadmin' && <ConnexionsAdmins />}
+              {tab === 'documents' && <DocumentsManager myRole={role} myUserId={userId} />}
             </div>
           </main>
         </div>
