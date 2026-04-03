@@ -14,7 +14,6 @@ import {
   ChevronLeft, Menu, Bell
 } from 'lucide-react'
 import { ActivityLog, Company, AdminUser, Permissions, DEFAULT_PERMISSIONS, UserRole, CustomFolder } from '@/types'
-import { BAGManager } from '@/components/BAGManager'
 import { CATEGORY_LABELS, CATEGORY_ICONS, COMPANIES } from '@/lib/companies-data'
 import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -40,9 +39,6 @@ const ACTION_LABELS: Record<string, { label: string; color: string; icon: string
   FOLDER_LOCKED: { label: 'Dossier verrouillé', color: 'text-amber-400', icon: '🔒', category: 'dossier' },
   FOLDER_UNLOCKED: { label: 'Dossier déverrouillé', color: 'text-emerald-300', icon: '🔓', category: 'dossier' },
   FILE_VIEW: { label: 'Fichier consulté', color: 'text-sky-400', icon: '👁️', category: 'consultation' },
-  BAG_CREATED: { label: 'BAG créé', color: 'text-gold-400', icon: '📋', category: 'admin' },
-  BAG_UPDATED: { label: 'BAG modifié', color: 'text-gold-400', icon: '📋', category: 'admin' },
-  BAG_DELETED: { label: 'BAG supprimé', color: 'text-red-400', icon: '📋', category: 'admin' },
   FILE_DOWNLOAD: { label: 'Fichier téléchargé', color: 'text-sky-300', icon: '⬇️', category: 'consultation' },
 }
 
@@ -102,7 +98,6 @@ function SidebarNav({ active, role, permissions, onTabChange, collapsed, onToggl
     { id: 'folders', label: 'Dossiers', icon: FolderLock, show: tabs.includes('folders') || isSuperAdmin || (isAdmin && (permissions?.canManageFolders ?? false)), section: 'admin' },
     { id: 'logs', label: 'Journaux', icon: ScrollText, show: tabs.includes('logs'), section: 'system' },
     { id: 'connexions', label: 'Connexions', icon: UserCheck, show: isSuperAdmin, section: 'system' },
-    { id: 'bag', label: 'B.A.G.', icon: FileText, show: permissions?.canManageBAG ?? false, section: 'main' },
   ].filter(i => i.always || i.show)
 
   const sections = [
@@ -1476,7 +1471,7 @@ export default function DashboardPage() {
   return (
     <>
       {/* Dashboard styles */}
-      <style>{`
+      <style jsx global>{`
         /* ── Layout ── */
         .sidebar-container {
           flex-shrink: 0;
@@ -1835,7 +1830,6 @@ export default function DashboardPage() {
               {tab === 'companies-new' && <CompanyCreator />}
               {tab === 'admins' && <UserManager myRole={role} myUserId={userId} />}
               {tab === 'connexions' && role === 'superadmin' && <ConnexionsAdmins />}
-              {tab === 'bag' && <BAGManager myRole={role as UserRole} myUserId={userId} />}
             </div>
           </main>
         </div>
