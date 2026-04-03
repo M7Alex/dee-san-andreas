@@ -163,18 +163,30 @@ export function BAGManager({ myRole, myUserId }: { myRole: UserRole; myUserId: s
   // Exporter DOCX
   async function exportDocx() {
     if (!current) return
-    // Sauvegarder d'abord
-    await save()
     setExporting(true)
+    // 1. Sauvegarder d'abord
+    await fetch('/api/admin/bags', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(current),
+    })
+    // 2. Télécharger le DOCX
     const res = await fetch(`/api/admin/bags/export?id=${current.id}`)
     if (res.ok) {
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `BAG_${current.entreprise || 'Document'}.docx`
+      const rawName = (current.entreprise || 'Document').replace(/[^a-zA-Z0-9]/g, '_')
+      const dateStr = current.dateAudit?.replace(/\//g, '-') || new Date().toISOString().split('T')[0]
+      a.download = `BAG_${rawName}_${dateStr}.docx`
+      document.body.appendChild(a)
       a.click()
+      document.body.removeChild(a)
       URL.revokeObjectURL(url)
+    } else {
+      const data = await res.json().catch(() => ({}))
+      alert(`Erreur export: ${data.error || 'Vérifiez la console'}`)
     }
     setExporting(false)
   }
@@ -626,12 +638,79 @@ export function BAGManager({ myRole, myUserId }: { myRole: UserRole; myUserId: s
           </table>
         </div>
 
+        <SubTitle title="A.3 Analyse des subventions" />
+        <p className="text-xs text-stone-500 mb-3">En cas de demande de subvention, complétez cette section pour instruire le dossier :</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead><tr className="border-b border-white/10">
+              <th className="text-left py-2 px-2 text-stone-400">Type de subvention</th>
+              <th className="text-center py-2 px-2 text-stone-400 w-20">Demandée</th>
+              <th className="text-left py-2 px-2 text-stone-400">Montant ($)</th>
+              <th className="text-left py-2 px-2 text-stone-400">Motif</th>
+            </tr></thead>
+            <tbody className="divide-y divide-white/5">
+              {[
+                { lbl: 'Fonctionnement (trésorerie)', ck: 'subvFonctionnement', mKey: 'montantSubvFonct' as keyof BAGDocument, mKey2: null, motKey: null },
+                { lbl: 'Événementielle (projet)', ck: null, mKey: 'montantSubvEvt' as keyof BAGDocument, mKey2: null, motKey: 'motifSubvEvt' as keyof BAGDocument },
+                { lbl: 'Investissement (équipement)', ck: null, mKey: 'montantSubvInvest' as keyof BAGDocument, mKey2: null, motKey: 'motifSubvInvest' as keyof BAGDocument },
+                { lbl: "Urgence (difficultés majeures)", ck: 'subvUrgence', mKey: 'montantSubvUrgence' as keyof BAGDocument, mKey2: null, motKey: null },
+                { lbl: 'Formation', ck: null, mKey: 'montantSubvFormation' as keyof BAGDocument, mKey2: null, motKey: 'motifSubvFormation' as keyof BAGDocument },
+              ].map(({ lbl, ck, mKey, motKey }) => (
+                <tr key={lbl} className="hover:bg-white/2">
+                  <td className="py-1.5 px-2 text-stone-300">{lbl}</td>
+                  <td className="py-1.5 px-2 text-center">
+                    {ck ? (
+                      <button onClick={() => setCB(ck, !current.checkboxes[ck as keyof typeof current.checkboxes])}
+                        className="text-lg hover:scale-110 transition-transform">
+                        {current.checkboxes[ck as keyof typeof current.checkboxes] ? '☑' : '☐'}
+                      </button>
+                    ) : <span className="text-stone-600">—</span>}
+                  </td>
+                  <td className="py-1.5 px-2">
+                    <input value={(current[mKey] as string) || ''} onChange={e => setField(mKey, e.target.value)}
+                      placeholder="—" className="w-full bg-transparent text-white placeholder-stone-600 outline-none border-b border-white/10 focus:border-gold-500/30" />
+                  </td>
+                  <td className="py-1.5 px-2">
+                    {motKey && <input value={(current[motKey] as string) || ''} onChange={e => setField(motKey, e.target.value)}
+                      placeholder="—" className="w-full bg-transparent text-stone-400 placeholder-stone-600 outline-none border-b border-white/10 focus:border-gold-500/30" />}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
         <SubTitle title="A.4 Recommandations stratégiques" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Field label="Court terme (cette semaine)" field="recourtTerme" bag={current} onChange={setField} multiline />
           <Field label="Moyen terme (2-3 semaines)" field="recoMoyenTerme" bag={current} onChange={setField} multiline />
           <Field label="Long terme / Expansion" field="recoLongTerme" bag={current} onChange={setField} multiline />
           <Field label="Points d'attention — risques" field="pointsAttention" bag={current} onChange={setField} multiline />
+        </div>
+      </div>
+
+        <SubTitle title="A.5 Trame entretien B.A.G. — Rappel conducteur" />
+        <div className="bg-gov-800/40 rounded-xl border border-white/5 p-4 space-y-1.5">
+          <p className="text-xs text-stone-400 mb-2 font-medium">Points obligatoires à aborder lors de l'entretien :</p>
+          {[
+            "Présentation de l'agent : « Bonjour, je suis [Nom], contrôleur fiscal au Department of Finance. »",
+            "Vérification identité : Patron / Co-patron / Gérant",
+            "Trésorerie : Montant exact en banque — noter précisément",
+            "Ressenti : Santé financière — Confortable / Tendue ?",
+            "Modèle économique : Clientèle de passage ou contrats ?",
+            "Écoulement des stocks : Facilement ? Difficultés ?",
+            "Difficultés : Manque personnel / Zone géo / Concurrence ?",
+            "Déclarations fiscales : Procédure comprise ? Retards ?",
+            "Aide gouvernementale : Besoin de subvention ?",
+            "RH : Besoin aide recrutement ou formation managers ?",
+            "Ouverture : Questions du patron pour le Gouvernement ?",
+            "Clôture : Informer qu'un B.A.G. sera rédigé et transmis au DOF",
+          ].map((item, i) => (
+            <div key={i} className="flex items-start gap-2 text-xs text-stone-300">
+              <span className="text-gold-600 flex-shrink-0 mt-0.5">▸</span>
+              <span>{item}</span>
+            </div>
+          ))}
         </div>
       </div>
 
