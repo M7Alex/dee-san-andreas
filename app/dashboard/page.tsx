@@ -102,10 +102,7 @@ function SidebarNav({ active, role, permissions, onTabChange, collapsed, onToggl
     { id: 'folders', label: 'Dossiers', icon: FolderLock, show: tabs.includes('folders') || isSuperAdmin || (isAdmin && (permissions?.canManageFolders ?? false)), section: 'admin' },
     { id: 'logs', label: 'Journaux', icon: ScrollText, show: tabs.includes('logs'), section: 'system' },
     { id: 'connexions', label: 'Connexions', icon: UserCheck, show: isSuperAdmin, section: 'system' },
-<<<<<<< Updated upstream
-=======
     { id: 'bag', label: 'B.A.G.', icon: FileText, show: permissions?.canManageBAG ?? false, section: 'main' },
->>>>>>> Stashed changes
   ].filter(i => i.always || i.show)
 
   const sections = [
@@ -1479,7 +1476,7 @@ export default function DashboardPage() {
   return (
     <>
       {/* Dashboard styles */}
-      <style jsx global>{`
+      <style>{`
         /* ── Layout ── */
         .sidebar-container {
           flex-shrink: 0;
@@ -1838,10 +1835,7 @@ export default function DashboardPage() {
               {tab === 'companies-new' && <CompanyCreator />}
               {tab === 'admins' && <UserManager myRole={role} myUserId={userId} />}
               {tab === 'connexions' && role === 'superadmin' && <ConnexionsAdmins />}
-<<<<<<< Updated upstream
-=======
               {tab === 'bag' && <BAGManager myRole={role as UserRole} myUserId={userId} />}
->>>>>>> Stashed changes
             </div>
           </main>
         </div>

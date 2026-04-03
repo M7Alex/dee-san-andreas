@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
           section('I. Cadre Juridique & Contexte de l\'Audit'),
           subsection('◆  1.1 Identification du gestionnaire'),
           para('Cadre juridique et historique de l\'audit :'),
-          fieldRow('Identité patron/co-patron', bag.idGestionnaire) as unknown as typeof new Paragraph,
+          new Table({ width: { size: cw, type: WidthType.DXA }, columnWidths: [3000, cw - 3000], rows: [fieldRow('Identité patron/co-patron', bag.idGestionnaire)] }),
           new Table({ width: { size: cw, type: WidthType.DXA }, columnWidths: [3000, cw - 3000], rows: [
             fieldRow('Date de prise de fonction', bag.datePriseFonction),
             fieldRow("Contexte de l'audit", bag.contexteAudit),
