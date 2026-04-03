@@ -14,7 +14,7 @@ export interface Permissions {
   canViewLogs: boolean
   canManageFolders: boolean
   canViewFolderPins: boolean
-  visibleTabs: Array<'dashboard' | 'companies' | 'logs' | 'pins' | 'admins' | 'folders' | 'companies-new'>
+  visibleTabs: Array<'dashboard' | 'companies' | 'logs' | 'pins' | 'admins' | 'folders' | 'companies-new' | 'documents'>
 }
 
 export const DEFAULT_PERMISSIONS: Record<UserRole, Permissions> = {
@@ -180,6 +180,7 @@ export interface DatabaseSchema {
   files: FileRecord[]
   folders: CustomFolder[]
   logs: ActivityLog[]
+  documents: BagDraft[]
   meta: { version: string; lastUpdated: string }
 }
 
@@ -188,4 +189,89 @@ export interface SessionData {
   role: UserRole
   companyId?: string
   companySlug?: string
+}
+
+// ─── Documents / BAG Drafts ───────────────────────────────────────────────────
+export interface BagDraft {
+  id: string
+  ownerId: string          // userId du créateur
+  ownerLabel: string       // username
+  title: string            // ex: "BAG - Maze Bank - 03/04/2026"
+  templateType: 'bag'      // extensible pour d'autres templates
+  status: 'draft' | 'finalized'
+  content: BagContent      // toutes les données du formulaire
+  createdAt: string
+  updatedAt: string
+}
+
+export interface BagContent {
+  // Page de garde
+  entreprise: string
+  secteur: string
+  refDossier: string
+  controleur: string
+  dateAudit: string
+  periodeControlee: string
+  typeControle: 'routine' | 'anomalie' | 'reprise' | ''
+  etatFinancier: 'stable' | 'moyen' | 'mauvais' | ''
+
+  // Section I — Cadre juridique
+  identiteGestionnaire: string
+  datePriseFonction: string
+  contextAudit: string
+  evaluationCooperation: 'totale' | 'partielle' | 'refus' | ''
+  observationsComportementales: string
+
+  // Section II — Analyse opérationnelle
+  effectifActuel: string
+  stabiliteEquipes: 'stable' | 'turnover' | 'recrutement' | ''
+  postesVacants: string
+  horaires: string
+  maitiseStocks: 'bonne' | 'moyenne' | 'insuffisante' | ''
+  fluxClientele: 'regulier' | 'irregulier' | 'faible' | ''
+  modeleEconomique: 'passage' | 'contrats' | 'mixte' | ''
+  dependanceExterne: 'autonome' | 'partielle' | 'dependante' | ''
+  difficulte1: string
+  difficulte2: string
+  difficulte3: string
+
+  // Section III — Bilan comptable
+  tresorerieDeclaree: string
+  tresorerieReelle: string
+  soldeApresFrais: string
+  impotDu: string
+  // Tableau 3 semaines [declared, paid, justifs, anomaly] x 3
+  semaine1: { declaration: boolean; paiement: boolean; justificatifs: boolean; anomalie: string }
+  semaine2: { declaration: boolean; paiement: boolean; justificatifs: boolean; anomalie: string }
+  semaine3: { declaration: boolean; paiement: boolean; justificatifs: boolean; anomalie: string }
+  qualificationCas: 'simple' | 'grave' | 'conformite' | ''
+  detailAnomalies: string
+
+  // Section IV — Préconisations
+  conclusionViabilite: string
+  // Mesures applicables
+  mesureRedressement: boolean; montantRedressement: string
+  mesureAmende: boolean; montantAmende: string
+  mesureExoneration: boolean; dureeExoneration: string; motifExoneration: string
+  mesureSubvFonctionnement: boolean; montantSubvFonct: string
+  mesureSubvUrgence: boolean; montantSubvUrgence: string
+  mesureAideRH: boolean
+  mesureFermeture: boolean; motifFermeture: string
+  mesureFraude: boolean
+  mesureAutre: string
+  // Résumé Discord
+  resumeSituation: string
+  subventionRecue: string
+  motifSubvention: string
+  // Signature
+  lieuDate: string
+  nomControleur: string
+  validePar: string
+
+  // Annexe A — Expertise comptable
+  source1: string; source2: string; sourceDependance: string
+  charges: Array<{ poste: string; montant: string; frequence: string; commentaire: string }>
+  amendes: Array<{ type: string; bareme: string; montant: string; justification: string }>
+  subventions: Array<{ type: string; demandee: boolean; montant: string; motif: string; avis: 'favorable' | 'defavorable' | '' }>
+  reco1: string; reco2: string; reco3: string; recoPoinPoints: string
 }
